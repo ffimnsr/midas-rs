@@ -1,0 +1,16 @@
+[package]
+name = "midas"
+version = "0.4.0"
+authors = ["ffimnsr <ffimnsr@gmail.com>"]
+edition = "2018"
+readme = "README.md"
+description = "Do painless migration."
+homepage = "https://github.com/ffimnsr/midas"
+repository = "https://github.com/ffimnsr/midas"
+
+[dependencies]
+clap = "2.33"
+serde = "1.0"
+toml = "0.5"
+postgres = "0.16.0-rc.2"
+regex = "1.2"
