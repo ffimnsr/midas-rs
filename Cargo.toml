@@ -10,7 +10,13 @@ repository = "https://github.com/ffimnsr/midas"
 
 [dependencies]
 clap = "2.33"
-serde = "1.0"
-toml = "0.5"
 postgres = "0.16.0-rc.2"
 regex = "1.2"
+failure = "0.1"
+env_logger = "0.6"
+log = "0.4"
+url = "2.1"
+fallible-iterator = "0.2"
+
+[dev-dependencies]
+tempfile = "3.1"

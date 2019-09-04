@@ -1,38 +1,31 @@
+use std::env;
 use std::path::Path;
-use std::fs;
-use std::fs::File;
+use std::time::Instant;
 
-use clap::{App, Arg, SubCommand};
-use postgres::{Client, NoTls};
+use clap::{App, AppSettings, Arg, SubCommand};
+use failure::Error;
 
 const PKG_VERSION: &'static str = env!("CARGO_PKG_VERSION");
-const PKG_AUTHORS: &'static str = env!("CARGO_PKG_AUTHORS");
 const PKG_DESCRIPTION: &'static str = env!("CARGO_PKG_DESCRIPTION");
 const PKG_NAME: &'static str = env!("CARGO_PKG_NAME");
 
-fn establish(database_url: &str) -> bool {
-    // Client::connect(database_url, NoTls).unwrap();
-    true
-}
+mod commander;
+mod lookup;
+mod sequel;
 
-fn create_migration(path: &Path, slug: &str, number: i32) {
-    // File::create(path.join())
-}
+use commander::Migrator;
+use sequel::postgres::Postgres;
 
-fn parse_filename(filename: &str) -> String {
+fn main() -> Result<(), Error> {
+    env::set_var("RUST_LOG", "midas=debug");
+    env_logger::init();
 
-}
-
-fn check_migration_table_exists() -> bool {
-    // "EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = '__schema_migrations')";
-    true
-}
-
-fn main() {
     let matches = App::new(PKG_NAME)
         .version(PKG_VERSION)
-        .author(PKG_AUTHORS)
         .about(PKG_DESCRIPTION)
+        .setting(AppSettings::ArgRequiredElseHelp)
+        .setting(AppSettings::DisableHelpSubcommand)
+        .setting(AppSettings::GlobalVersion)
         .arg(
             Arg::with_name("database")
                 .short("d")
@@ -40,7 +33,6 @@ fn main() {
                 .value_name("URL")
                 .help("Sets the database connection url")
                 .takes_value(true)
-
         )
         .arg(
             Arg::with_name("source")
@@ -53,6 +45,11 @@ fn main() {
         .subcommand(
             SubCommand::with_name("create")
                 .about("Creates a timestamped migration file")
+                .arg(
+                    Arg::with_name("name")
+                        .help("The migration action name")
+                        .required(true)
+                )
         )
         .subcommand(
             SubCommand::with_name("status")
@@ -75,31 +72,59 @@ fn main() {
                 .about("Reverts the last migration")
         )
         .subcommand(
+            SubCommand::with_name("setup")
+                .about("Setups and creates the database must have privilege user")
+        )
+        .subcommand(
             SubCommand::with_name("drop")
                 .about("Drops everything inside the database")
         )
         .get_matches();
 
-    // match matches.occurrences_of("v") {
-    //     0 => println!("No verbose info"),
-    //     1 => println!("Some verbose info"),
-    //     2 => println!("Tons of verbose info"),
-    //     3 | _ => println!("Don't be crazy"),
-    // }
+    let database_url = matches.value_of("database")
+        .unwrap_or("postgres://postgres@localhost:5432/passport");
 
-    let database_url = matches.value_of("database").unwrap_or("postgres://localhost:5432/postgres");
     let source = matches.value_of("source").unwrap_or("migrations");
     let source_path = Path::new(&source);
+    let migrations = lookup::build_migration_list(source_path)?;
+
+    let start = Instant::now();
+
+    let executor = Postgres::new(database_url)?;
+    let mut migrator = Migrator::new(Box::new(executor), migrations);
 
     match matches.subcommand_name() {
-        Some("create") => println!("create"),
-        Some("status") => println!("status"),
-        Some("up") => println!("up"),
-        Some("down") => println!("down"),
-        Some("redo") => println!("redo"),
-        Some("revert") => println!("revert"),
-        Some("drop") => println!("drop"),
+        Some("create") => {
+            let slug = matches.subcommand_matches("create")
+                .unwrap()
+                .value_of("name")
+                .unwrap();
+
+            migrator.create(source_path, slug)?
+        },
+        Some("status") => migrator.status()?,
+        Some("up") => migrator.up()?,
+        Some("down") => migrator.down()?,
+        Some("redo") => migrator.redo()?,
+        Some("revert") => migrator.revert()?,
+        Some("setup") => migrator.setup()?,
+        Some("drop") => migrator.drop()?,
         None => println!("No subcommand provided"),
         _ => println!("Invalid subcommand provided"),
     }
+
+    let duration = start.elapsed();
+    let minutes = duration.as_secs() / 60;
+    let seconds = duration.as_secs() % 60;
+
+    if minutes == 0 && seconds == 0 {
+        println!("Operation took less than 1 second.");
+    } else {
+        println!(
+            "Operation took {} minutes and {} seconds.",
+            minutes, seconds
+        );
+    }
+
+    Ok(())
 }
