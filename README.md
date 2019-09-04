@@ -34,4 +34,4 @@ cargo install midas
 
 MIT © ffimnsr
 
-Licensed under MIT license (LICENSE-MIT or http://opensource.org/licenses/MIT).
+Licensed under MIT license (LICENSE or http://opensource.org/licenses/MIT).
