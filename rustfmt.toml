@@ -1,0 +1,12 @@
+normalize_comments = true
+wrap_comments = false
+format_doc_comments = true
+comment_width = 90
+use_small_heuristics = "max"
+fn_args_density = "compressed"
+fn_single_line = false
+overflow_delimited_expr = true
+where_single_line = true
+edition = "2018"
+blank_lines_upper_bound = 2
+reorder_impl_items = true

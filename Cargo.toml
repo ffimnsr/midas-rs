@@ -1,14 +1,16 @@
 [package]
 name = "midas"
-version = "0.4.0"
+version = "0.4.1"
 authors = ["ffimnsr <ffimnsr@gmail.com>"]
 edition = "2018"
 readme = "README.md"
 description = "Do painless migration."
+categories = ["command-line-utilities", "development-tools", "embedded"]
 homepage = "https://github.com/ffimnsr/midas"
 repository = "https://github.com/ffimnsr/midas"
-license = "MIT"
+license = "MIT OR Apache-2.0"
 keywords = ["migrations", "database", "postgres", "migrate", "cli"]
+exclude = [".gitignore"]
 
 [dependencies]
 clap = "2.33"

@@ -1,3 +1,4 @@
+#[allow(unused_imports)]
 use std::env;
 use std::path::Path;
 use std::time::Instant;
@@ -17,7 +18,7 @@ use commander::Migrator;
 use sequel::postgres::Postgres;
 
 fn main() -> Result<(), Error> {
-    env::set_var("RUST_LOG", "midas=debug");
+    // env::set_var("RUST_LOG", "midas=debug");
     env_logger::init();
 
     let matches = App::new(PKG_NAME)
