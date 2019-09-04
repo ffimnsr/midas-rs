@@ -4,11 +4,13 @@
 [![Crates.io](https://img.shields.io/crates/l/midas?style=flat-square)](https://crates.io/crates/midas)
 [![Crates.io](https://img.shields.io/crates/d/midas?style=flat-square)](https://crates.io/crates/midas)
 
-> Space is big. You just won't believe how vastly, hugely,
-> mind-bogglingly big it is. I mean, you may think it's a
-> long way down the road to the chemist's, but that's just
-> peanuts to space.
-> - from The Hitchhicker's Guide To The Galaxy by Douglas Adams
+> So Midas, king of Lydia, swelled at first with pride
+> when he found he could transform everything he touched
+> to gold; but when he beheld his food grow rigid and his
+> drink harden into golden ice then he understood that
+> this gift was a bane and in his loathing for gold, cursed
+> his prayer.
+> - from In Rufinem, Claudian
 
 Do painless migrations.
 
@@ -25,14 +27,25 @@ Currently, the only supported database is `Postgres`.
 Here is a sample command line usage of `midas`.
 
 ~~~
-$ midas --source postgres://postgres@localhost:5432/postgres up
+$ midas --database postgres://postgres@localhost:5432/postgres --source migrations up
 ~~~
 
-## Development
+The command will execute all **special** (up) SQL migrations files to the database.
 
-### Dependencies
+Here are the available subcommands:
 
-- Rust and Cargo.
+``` shell
+    create    Creates a timestamped migration file
+    down      Remove all applied migrations
+    drop      Drops everything inside the database
+    redo      Redo the last migration
+    revert    Reverts the last migration
+    setup     Setups and creates the database must have privilege user
+    status    Checks the status of the migration
+    up        Apply all non-applied migrations
+```
+
+For more info see `--help`.
 
 ## Installation
 
@@ -43,6 +56,8 @@ If you're into **Rust** then you can use `cargo` to install.
 ~~~
 cargo install midas
 ~~~
+
+Binary format for different OS distribution can be downloaded on the Github repo downloads tab.
 
 ## License
 
