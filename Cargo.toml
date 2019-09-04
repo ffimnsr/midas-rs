@@ -7,6 +7,8 @@ readme = "README.md"
 description = "Do painless migration."
 homepage = "https://github.com/ffimnsr/midas"
 repository = "https://github.com/ffimnsr/midas"
+license = "MIT"
+keywords = ["migrations", "database", "postgres", "migrate", "cli", "tool", "utilities"]
 
 [dependencies]
 clap = "2.33"
