@@ -26,9 +26,9 @@ Currently, the only supported database is `Postgres`.
 
 Here is a sample command line usage of `midas`.
 
-~~~
+``` shellbash
 $ midas --database postgres://postgres@localhost:5432/postgres --source migrations up
-~~~
+```
 
 The command will execute all **special** (up) SQL migrations files to the database.
 
@@ -53,11 +53,11 @@ If you're into **Rust** then you can use `cargo` to install.
 
 * The minimum supported version of Rust is 1.37.0.
 
-~~~
-cargo install midas
-~~~
+``` shellbash
+$ cargo install midas
+```
 
-Binary format for different OS distribution can be downloaded on the Github repo downloads tab.
+Binary format for different OS distribution can be downloaded [here](https://github.com/ffimnsr/midas/releases).
 
 ## License
 
