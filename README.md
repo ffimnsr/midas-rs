@@ -59,6 +59,13 @@ $ cargo install midas
 
 Binary format for different OS distribution can be downloaded [here](https://github.com/ffimnsr/midas/releases).
 
+## What's in the Roadmap
+
+- [ ] TOML DSL for creating database objects
+- [ ] Setup multiple drivers (e.g. MySQL, Sqlite3, etc.)
+- [ ] Add functionality for `setup` and `drop` commands.
+- More to come.
+
 ## License
 
 Licensed under either of
