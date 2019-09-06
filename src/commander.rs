@@ -109,7 +109,7 @@ impl <T: SequelDriver + 'static> Migrator<T> {
             return Ok(())
         }
 
-        for it in completed_migrations.iter() {
+        for it in completed_migrations.iter().rev() {
             println!("[{:013}] Undo migration from database.", it);
             let migration = self.migrations.get(&it).unwrap();
             let content_down = migration.content_down.as_ref().unwrap();

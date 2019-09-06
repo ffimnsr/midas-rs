@@ -35,14 +35,14 @@ The command will execute all **special** (up) SQL migrations files to the databa
 Here are the available subcommands:
 
 ``` shell
-    create    Creates a timestamped migration file
-    down      Remove all applied migrations
-    drop      Drops everything inside the database
-    redo      Redo the last migration
-    revert    Reverts the last migration
-    setup     Setups and creates the database must have privilege user
-    status    Checks the status of the migration
-    up        Apply all non-applied migrations
+  create    Creates a timestamped migration file
+  down      Remove all applied migrations
+  drop      Drops everything inside the database
+  redo      Redo the last migration
+  revert    Reverts the last migration
+  setup     Setups and creates the database must have privilege user
+  status    Checks the status of the migration
+  up        Apply all non-applied migrations
 ```
 
 For more info see `--help`.
@@ -64,7 +64,7 @@ Binary format for different OS distribution can be downloaded [here](https://git
 - [ ] TOML DSL for creating database objects
 - [ ] Setup multiple drivers (e.g. MySQL, Sqlite3, etc.)
 - [ ] Add functionality for `setup` and `drop` commands.
-- More to come.
+- [ ] More to come.
 
 ## License
 

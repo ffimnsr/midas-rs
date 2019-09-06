@@ -1,6 +1,6 @@
 [package]
 name = "midas"
-version = "0.5.0"
+version = "0.5.1"
 authors = ["ffimnsr <ffimnsr@gmail.com>"]
 edition = "2018"
 readme = "README.md"
@@ -20,7 +20,6 @@ failure = "0.1"
 env_logger = "0.6"
 log = "0.4"
 url = "2.1"
-fallible-iterator = "0.2"
 
 [dev-dependencies]
 tempfile = "3.1"
