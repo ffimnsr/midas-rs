@@ -66,15 +66,16 @@ pub fn build_migration_list(path: &Path) -> Result<MigrationFiles, Error> {
         let mut buf_reader = BufReader::new(file);
         let mut content = String::new();
         buf_reader.read_to_string(&mut content)?;
-
+        
         let split_vec: Vec<String> = content.split("\n")
             .map(|s| s.to_string())
             .collect();
+
         let pos_up = split_vec.iter()
-            .position(|s| s == "-- !UP")
+            .position(|s| s == "-- !UP" || s == "-- !UP\r")
             .unwrap();
         let pos_down = split_vec.iter()
-            .position(|s| s == "-- !DOWN")
+            .position(|s| s == "-- !DOWN" || s == "-- !DOWN\r")
             .unwrap();
 
         let content_up = &split_vec[(pos_up + 1)..pos_down];
@@ -85,7 +86,7 @@ pub fn build_migration_list(path: &Path) -> Result<MigrationFiles, Error> {
             content_down: Some(content_down.to_vec()),
             ..info
         };
-
+        
         debug!("{:?}", migration);
         files.insert(migration.number, migration);
     }

@@ -468,7 +468,7 @@ dependencies = [
 
 [[package]]
 name = "midas"
-version = "0.5.1"
+version = "0.5.2"
 dependencies = [
  "clap 2.33.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "env_logger 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)",

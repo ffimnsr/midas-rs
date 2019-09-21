@@ -81,12 +81,12 @@ fn main() -> Result<(), Error> {
                 .about("Drops everything inside the database")
         )
         .get_matches();
-
+    
     let database_url = matches.value_of("database")
         .unwrap_or("postgres://postgres@localhost:5432/passport");
-
-    let source = matches.value_of("source").unwrap_or("migrations");
-    let source_path = Path::new(&source);
+    
+    let source = matches.value_of("source").unwrap_or("migrations");    
+    let source_path = Path::new(&source);    
     let migrations = lookup::build_migration_list(source_path)?;
 
     let start = Instant::now();
