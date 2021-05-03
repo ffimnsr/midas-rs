@@ -14,12 +14,12 @@ exclude = [".gitignore"]
 
 [dependencies]
 clap = "2.33"
-postgres = "0.16.0-rc.2"
-regex = "1.2"
+postgres = "0.19"
+regex = "1.5"
 failure = "0.1"
-env_logger = "0.6"
+env_logger = "0.8"
 log = "0.4"
-url = "2.1"
+url = "2.2"
 
 [dev-dependencies]
-tempfile = "3.1"
+tempfile = "3.2"

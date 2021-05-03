@@ -1,0 +1,30 @@
+name: midas-rs
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os:
+          - ubuntu-latest
+        node-version: 
+          - 14
+        architecture: 
+          - x64
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install rust stable toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+      - name: Run cargo check
+        uses: actions-rs/cargo@v1
+        continue-on-error: false
+        with:
+          command: check  

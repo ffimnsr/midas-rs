@@ -1,16 +1,16 @@
-use postgres::{Client, NoTls};
 use log::debug;
+use postgres::{Client, NoTls};
 
-use super::{SequelDriver, VecSerial, Error};
+use super::{Error, SequelDriver, VecSerial};
 
 pub struct Postgres {
-    client: Client
+    client: Client,
 }
 
 impl Postgres {
     pub fn new(database_url: &str) -> Result<Self, Error> {
         let client = Client::connect(database_url, NoTls)?;
-        let mut pg = Postgres {client};
+        let mut pg = Postgres { client };
         pg.ensure_migration_table_exists()?;
         Ok(pg)
     }
@@ -64,7 +64,8 @@ impl SequelDriver for Postgres {
     }
 
     fn delete_last_completed_migration(&mut self) -> Result<(), Error> {
-        let payload = "DELETE FROM __schema_migrations WHERE id=(SELECT MAX(id) FROM __schema_migrations);";
+        let payload =
+            "DELETE FROM __schema_migrations WHERE id=(SELECT MAX(id) FROM __schema_migrations);";
         self.client.execute(payload, &[])?;
         Ok(())
     }

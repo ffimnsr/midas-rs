@@ -1,5 +1,5 @@
-use std::path::Path;
 use std::iter::Iterator;
+use std::path::Path;
 
 use failure::Error;
 use log::debug;
@@ -9,26 +9,18 @@ use crate::sequel::{SequelDriver, VecSerial};
 
 macro_rules! get_content_string {
     ($content: ident) => {
-        $content
-            .iter()
-            .filter(|&l| l != "")
-            .map(|s| s.to_owned())
-            .collect::<VecStr>()
-            .join("\n")
-    }
+        $content.iter().filter(|&l| l != "").map(|s| s.to_owned()).collect::<VecStr>().join("\n")
+    };
 }
 
 pub struct Migrator<T> {
     executor: Box<T>,
-    migrations: MigrationFiles
+    migrations: MigrationFiles,
 }
 
-impl <T: SequelDriver + 'static> Migrator<T> {
+impl<T: SequelDriver + 'static> Migrator<T> {
     pub fn new(executor: Box<T>, migrations: MigrationFiles) -> Self {
-        Self {
-            executor,
-            migrations
-        }
+        Self { executor, migrations }
     }
 
     pub fn create(&mut self, path: &Path, slug: &str) -> Result<(), Error> {
@@ -44,7 +36,7 @@ impl <T: SequelDriver + 'static> Migrator<T> {
 
         if available_migrations.is_empty() {
             println!("There are no available migration files.");
-            return Ok(())
+            return Ok(());
         }
 
         println!("Building active migrations list...");
@@ -53,13 +45,13 @@ impl <T: SequelDriver + 'static> Migrator<T> {
                 println!("{:013} = Inactive", it);
             }
 
-            return Ok(())
+            return Ok(());
         }
 
         for it in available_migrations.iter() {
             let does_have = match completed_migrations.contains(it) {
                 true => "Active",
-                _ => "Inactive"
+                _ => "Inactive",
             };
             println!("{:013} = {}", it, does_have);
         }
@@ -73,7 +65,7 @@ impl <T: SequelDriver + 'static> Migrator<T> {
 
         if available_migrations.is_empty() {
             println!("There are no available migration files.");
-            return Ok(())
+            return Ok(());
         }
 
         let filtered = available_migrations
@@ -84,7 +76,7 @@ impl <T: SequelDriver + 'static> Migrator<T> {
 
         if filtered.is_empty() {
             println!("Migrations are all up-to-date.");
-            return Ok(())
+            return Ok(());
         }
 
         for it in filtered.iter() {
@@ -106,7 +98,7 @@ impl <T: SequelDriver + 'static> Migrator<T> {
         let completed_migrations = self.executor.get_completed_migrations()?;
         if completed_migrations.is_empty() {
             println!("Migrations table is empty. No need to run down migrations.");
-            return Ok(())
+            return Ok(());
         }
 
         for it in completed_migrations.iter().rev() {
@@ -159,7 +151,7 @@ impl <T: SequelDriver + 'static> Migrator<T> {
         let current = self.executor.get_last_completed_migration()?;
         if current == -1 {
             println!("Migrations table is empty. No need to run revert migrations.");
-            return Ok(())
+            return Ok(());
         }
 
         println!("[{:013}] Reverting actions from last migration.", current);
@@ -183,11 +175,8 @@ impl <T: SequelDriver + 'static> Migrator<T> {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     #[test]
-    fn test_create() {
-
-    }
+    fn test_create() {}
 }

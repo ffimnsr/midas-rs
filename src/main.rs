@@ -33,7 +33,7 @@ fn main() -> Result<(), Error> {
                 .long("database")
                 .value_name("URL")
                 .help("Sets the database connection url")
-                .takes_value(true)
+                .takes_value(true),
         )
         .arg(
             Arg::with_name("source")
@@ -41,52 +41,30 @@ fn main() -> Result<(), Error> {
                 .long("source")
                 .value_name("DIR")
                 .help("Sets the migration store directory")
-                .takes_value(true)
+                .takes_value(true),
         )
         .subcommand(
             SubCommand::with_name("create")
                 .about("Creates a timestamped migration file")
-                .arg(
-                    Arg::with_name("name")
-                        .help("The migration action name")
-                        .required(true)
-                )
+                .arg(Arg::with_name("name").help("The migration action name").required(true)),
         )
-        .subcommand(
-            SubCommand::with_name("status")
-                .about("Checks the status of the migration")
-        )
-        .subcommand(
-            SubCommand::with_name("up")
-                .about("Apply all non-applied migrations")
-        )
-        .subcommand(
-            SubCommand::with_name("down")
-                .about("Remove all applied migrations")
-        )
-        .subcommand(
-            SubCommand::with_name("redo")
-                .about("Redo the last migration")
-        )
-        .subcommand(
-            SubCommand::with_name("revert")
-                .about("Reverts the last migration")
-        )
+        .subcommand(SubCommand::with_name("status").about("Checks the status of the migration"))
+        .subcommand(SubCommand::with_name("up").about("Apply all non-applied migrations"))
+        .subcommand(SubCommand::with_name("down").about("Remove all applied migrations"))
+        .subcommand(SubCommand::with_name("redo").about("Redo the last migration"))
+        .subcommand(SubCommand::with_name("revert").about("Reverts the last migration"))
         .subcommand(
             SubCommand::with_name("setup")
-                .about("Setups and creates the database must have privilege user")
+                .about("Setups and creates the database must have privilege user"),
         )
-        .subcommand(
-            SubCommand::with_name("drop")
-                .about("Drops everything inside the database")
-        )
+        .subcommand(SubCommand::with_name("drop").about("Drops everything inside the database"))
         .get_matches();
-    
-    let database_url = matches.value_of("database")
-        .unwrap_or("postgres://postgres@localhost:5432/passport");
-    
-    let source = matches.value_of("source").unwrap_or("migrations");    
-    let source_path = Path::new(&source);    
+
+    let database_url =
+        matches.value_of("database").unwrap_or("postgres://postgres@localhost:5432/passport");
+
+    let source = matches.value_of("source").unwrap_or("migrations");
+    let source_path = Path::new(&source);
     let migrations = lookup::build_migration_list(source_path)?;
 
     let start = Instant::now();
@@ -96,13 +74,10 @@ fn main() -> Result<(), Error> {
 
     match matches.subcommand_name() {
         Some("create") => {
-            let slug = matches.subcommand_matches("create")
-                .unwrap()
-                .value_of("name")
-                .unwrap();
+            let slug = matches.subcommand_matches("create").unwrap().value_of("name").unwrap();
 
             migrator.create(source_path, slug)?
-        },
+        }
         Some("status") => migrator.status()?,
         Some("up") => migrator.up()?,
         Some("down") => migrator.down()?,
@@ -121,10 +96,7 @@ fn main() -> Result<(), Error> {
     if minutes == 0 && seconds == 0 {
         println!("Operation took less than 1 second.");
     } else {
-        println!(
-            "Operation took {} minutes and {} seconds.",
-            minutes, seconds
-        );
+        println!("Operation took {} minutes and {} seconds.", minutes, seconds);
     }
 
     Ok(())
