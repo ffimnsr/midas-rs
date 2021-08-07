@@ -15,11 +15,19 @@ mod lookup;
 mod sequel;
 
 use commander::Migrator;
+use log::debug;
 use sequel::postgres::Postgres;
 
 fn main() -> Result<(), Error> {
-    // env::set_var("RUST_LOG", "midas=debug");
-    env_logger::init();
+    dotenv::dotenv().ok();
+
+    if env::var("RUST_LOG").is_err() {
+        env::set_var("RUST_LOG", "midas=info");
+    }
+
+    tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .init();
 
     let matches = App::new(PKG_NAME)
         .version(PKG_VERSION)
@@ -60,8 +68,13 @@ fn main() -> Result<(), Error> {
         .subcommand(SubCommand::with_name("drop").about("Drops everything inside the database"))
         .get_matches();
 
+    let env_db_url = env::var("DSN")
+        .unwrap_or("postgres://postgres@localhost:5432/midas?sslmode=disable".to_string());
+
     let database_url =
-        matches.value_of("database").unwrap_or("postgres://postgres@localhost:5432/passport");
+        matches.value_of("database").unwrap_or(&env_db_url);
+
+    debug!("Using DSN: {}", database_url);
 
     let source = matches.value_of("source").unwrap_or("migrations");
     let source_path = Path::new(&source);
@@ -74,7 +87,10 @@ fn main() -> Result<(), Error> {
 
     match matches.subcommand_name() {
         Some("create") => {
-            let slug = matches.subcommand_matches("create").unwrap().value_of("name").unwrap();
+            let slug = matches.subcommand_matches("create")
+                .unwrap()
+                .value_of("name")
+                .unwrap();
 
             migrator.create(source_path, slug)?
         }
@@ -94,9 +110,9 @@ fn main() -> Result<(), Error> {
     let seconds = duration.as_secs() % 60;
 
     if minutes == 0 && seconds == 0 {
-        println!("Operation took less than 1 second.");
+        debug!("Operation took less than 1 second.");
     } else {
-        println!("Operation took {} minutes and {} seconds.", minutes, seconds);
+        debug!("Operation took {} minutes and {} seconds.", minutes, seconds);
     }
 
     Ok(())

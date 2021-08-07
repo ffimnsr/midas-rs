@@ -2,7 +2,7 @@ use std::iter::Iterator;
 use std::path::Path;
 
 use failure::Error;
-use log::debug;
+use log::trace;
 
 use crate::lookup::{self, MigrationFiles, VecStr};
 use crate::sequel::{SequelDriver, VecSerial};
@@ -85,7 +85,7 @@ impl<T: SequelDriver + 'static> Migrator<T> {
             let content_up = migration.content_up.as_ref().unwrap();
             let content_up = get_content_string!(content_up);
 
-            debug!("{:?}", content_up);
+            trace!("Running the following up query: {:?}", content_up);
 
             self.executor.migrate(&content_up)?;
             self.executor.add_completed_migration(it.to_owned())?;
@@ -107,7 +107,7 @@ impl<T: SequelDriver + 'static> Migrator<T> {
             let content_down = migration.content_down.as_ref().unwrap();
             let content_down = get_content_string!(content_down);
 
-            debug!("{:?}", content_down);
+            trace!("Running the following down query: {:?}", content_down);
 
             self.executor.migrate(&content_down)?;
             self.executor.delete_completed_migration(it.to_owned())?;
@@ -135,7 +135,7 @@ impl<T: SequelDriver + 'static> Migrator<T> {
             self.executor.delete_completed_migration(current)?;
         }
 
-        debug!("{:?}", migration);
+        trace!("Running the method `redo` {:?}", migration);
 
         println!("[{:013}] Applying recent migration in the database.", current);
         let content_up = migration.content_up.as_ref().unwrap();

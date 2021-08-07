@@ -1,11 +1,11 @@
 [package]
 name = "midas"
-version = "0.5.2"
+version = "0.5.4"
 authors = ["ffimnsr <ffimnsr@gmail.com>"]
 edition = "2018"
 readme = "README.md"
 description = "Do painless migration."
-categories = ["command-line-utilities", "development-tools", "embedded"]
+categories = ["command-line-utilities", "development-tools"]
 homepage = "https://github.com/ffimnsr/midas"
 repository = "https://github.com/ffimnsr/midas"
 license = "MIT OR Apache-2.0"
@@ -17,7 +17,11 @@ clap = "2.33"
 postgres = "0.19"
 regex = "1.5"
 failure = "0.1"
-env_logger = "0.8"
+dotenv = "0.15"
+tracing = "0.1"
+tracing-subscriber = { version = "0.2", features = ["tracing-log"] }
+tracing-attributes = "0.1"
+tracing-futures = "0.2"
 log = "0.4"
 url = "2.2"
 

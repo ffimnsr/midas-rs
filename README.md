@@ -1,8 +1,9 @@
 # Midas
 
-[![Crates.io](https://img.shields.io/crates/v/midas?style=flat-square)](https://crates.io/crates/midas)
-[![Crates.io](https://img.shields.io/crates/l/midas?style=flat-square)](https://crates.io/crates/midas)
-[![Crates.io](https://img.shields.io/crates/d/midas?style=flat-square)](https://crates.io/crates/midas)
+[![Crates.io Package](https://img.shields.io/crates/v/midas?style=flat-square)](https://crates.io/crates/midas)
+[![Crates.io Downloads](https://img.shields.io/crates/d/midas?style=flat-square)](https://crates.io/crates/midas)
+[![License](https://img.shields.io/crates/l/midas?style=flat-square)](https://github.com/ffimnsr/midas-rs/blob/master/LICENSE-APACHE)
+[![Github Workflow](https://img.shields.io/github/workflow/status/ffimnsr/midas-rs/midas-rs?style=flat-square)](https://github.com/ffimnsr/midas-rs)
 
 > So Midas, king of Lydia, swelled at first with pride
 > when he found he could transform everything he touched
@@ -14,8 +15,6 @@
 
 Do painless migrations.
 
-NOTE: This README is still under construction.
-
 ## Supported Database
 
 Currently, the only supported database is `Postgres`.
@@ -26,23 +25,23 @@ Currently, the only supported database is `Postgres`.
 
 Here is a sample command line usage of `midas`.
 
-``` shellbash
-$ midas --database postgres://postgres@localhost:5432/postgres --source migrations up
+```shell
+midas --database postgres://postgres@localhost:5432/postgres --source migrations up
 ```
 
 The command will execute all **special** (up) SQL migrations files to the database.
 
 Here are the available subcommands:
 
-``` shell
-  create    Creates a timestamped migration file
-  down      Remove all applied migrations
-  drop      Drops everything inside the database
-  redo      Redo the last migration
-  revert    Reverts the last migration
-  setup     Setups and creates the database must have privilege user
-  status    Checks the status of the migration
-  up        Apply all non-applied migrations
+```shell
+create    Creates a timestamped migration file
+down      Remove all applied migrations
+drop      Drops everything inside the database
+redo      Redo the last migration
+revert    Reverts the last migration
+setup     Setups and creates the database must have privilege user
+status    Checks the status of the migration
+up        Apply all non-applied migrations
 ```
 
 For more info see `--help`.
@@ -53,8 +52,8 @@ If you're into **Rust** then you can use `cargo` to install.
 
 * The minimum supported version of Rust is 1.37.0.
 
-``` shellbash
-$ cargo install midas
+```shellbash
+cargo install midas
 ```
 
 Binary format for different OS distribution can be downloaded [here](https://github.com/ffimnsr/midas/releases).

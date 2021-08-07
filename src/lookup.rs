@@ -21,7 +21,7 @@ pub struct MigrationFile {
 
 impl MigrationFile {
     fn new(filename: &str, number: i64) -> Self {
-        Self { content_up: None, content_down: None, filename: filename.to_owned(), number: number }
+        Self { content_up: None, content_down: None, filename: filename.to_owned(), number }
     }
 }
 
@@ -70,7 +70,7 @@ pub fn build_migration_list(path: &Path) -> Result<MigrationFiles, Error> {
             ..info
         };
 
-        debug!("{:?}", migration);
+        debug!("Running the migration: {:?}", migration);
         files.insert(migration.number, migration);
     }
 
@@ -87,7 +87,7 @@ pub fn create_migration_file(path: &Path, slug: &str) -> Result<(), Error> {
     let filename = timestamp() + "_" + slug + ".sql";
     let filepath = path.join(filename.clone());
 
-    debug!("{:?}", filepath);
+    debug!("Creating new migration file: {:?}", filepath);
     let mut f = File::create(filepath)?;
     let contents = "\
     -- # Put the your SQL below migration seperator.\n\
