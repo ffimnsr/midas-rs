@@ -11,9 +11,9 @@ jobs:
       matrix:
         os:
           - ubuntu-latest
-        node-version: 
+        node-version:
           - 14
-        architecture: 
+        architecture:
           - x64
     steps:
       - uses: actions/checkout@v2
@@ -27,4 +27,4 @@ jobs:
         uses: actions-rs/cargo@v1
         continue-on-error: false
         with:
-          command: check  
+          command: check

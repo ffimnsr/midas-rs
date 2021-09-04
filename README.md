@@ -3,7 +3,7 @@
 [![Crates.io Package](https://img.shields.io/crates/v/midas?style=flat-square)](https://crates.io/crates/midas)
 [![Crates.io Downloads](https://img.shields.io/crates/d/midas?style=flat-square)](https://crates.io/crates/midas)
 [![License](https://img.shields.io/crates/l/midas?style=flat-square)](https://github.com/ffimnsr/midas-rs/blob/master/LICENSE-APACHE)
-[![Github Workflow](https://img.shields.io/github/workflow/status/ffimnsr/midas-rs/midas-rs?style=flat-square)](https://github.com/ffimnsr/midas-rs)
+[![Github Workflow Status](https://img.shields.io/github/workflow/status/ffimnsr/midas-rs/midas-rs?style=flat-square)](https://github.com/ffimnsr/midas-rs)
 
 > So Midas, king of Lydia, swelled at first with pride
 > when he found he could transform everything he touched
@@ -29,8 +29,7 @@ Here is a sample command line usage of `midas`.
 midas --database postgres://postgres@localhost:5432/postgres --source migrations up
 ```
 
-The command will execute all **special** (up) SQL migrations files to the database.
-
+The command will execute all **special** (up) SQL migrations files to the database. \
 Here are the available subcommands:
 
 ```shell
@@ -56,7 +55,7 @@ If you're into **Rust** then you can use `cargo` to install.
 cargo install midas
 ```
 
-Binary format for different OS distribution can be downloaded [here](https://github.com/ffimnsr/midas/releases).
+Binary for different OS distribution can be downloaded [here](https://github.com/ffimnsr/midas/releases).
 
 ## What's in the Roadmap
 
@@ -77,6 +76,4 @@ at your option.
 
 ### Contribution
 
-Unless you explicitly state otherwise, any contribution intentionally submitted
-for inclusion in the work by you, as defined in the Apache-2.0 license, shall be
-dual licensed as above, without any additional terms or conditions.
+Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in the work by you, as defined in the Apache-2.0 license, shall be dual licensed as above, without any additional terms or conditions.

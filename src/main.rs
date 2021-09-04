@@ -4,7 +4,6 @@ use std::path::Path;
 use std::time::Instant;
 
 use clap::{App, AppSettings, Arg, SubCommand};
-use failure::Error;
 
 const PKG_VERSION: &'static str = env!("CARGO_PKG_VERSION");
 const PKG_DESCRIPTION: &'static str = env!("CARGO_PKG_DESCRIPTION");
@@ -18,7 +17,9 @@ use commander::Migrator;
 use log::debug;
 use sequel::postgres::Postgres;
 
-fn main() -> Result<(), Error> {
+pub(crate) type GenericError = Box<dyn std::error::Error + Send + Sync>;
+
+fn main() -> Result<(), GenericError> {
     dotenv::dotenv().ok();
 
     if env::var("RUST_LOG").is_err() {
@@ -69,14 +70,16 @@ fn main() -> Result<(), Error> {
         .get_matches();
 
     let env_db_url = env::var("DSN")
-        .unwrap_or("postgres://postgres@localhost:5432/midas?sslmode=disable".to_string());
+        .unwrap_or("postgres://postgres@localhost:5432/postgres?sslmode=disable".into());
 
-    let database_url =
-        matches.value_of("database").unwrap_or(&env_db_url);
+    let database_url = matches.value_of("database").unwrap_or(&env_db_url);
+
+    let env_source_path = env::var("MIGRATIONS_ROOT")
+        .unwrap_or("migrations".into());
 
     debug!("Using DSN: {}", database_url);
 
-    let source = matches.value_of("source").unwrap_or("migrations");
+    let source = matches.value_of("source").unwrap_or(&env_source_path);
     let source_path = Path::new(&source);
     let migrations = lookup::build_migration_list(source_path)?;
 
@@ -88,9 +91,9 @@ fn main() -> Result<(), Error> {
     match matches.subcommand_name() {
         Some("create") => {
             let slug = matches.subcommand_matches("create")
-                .unwrap()
+                .ok_or("No slug was detected")?
                 .value_of("name")
-                .unwrap();
+                .ok_or("Slug is either malformed or undecipherable")?;
 
             migrator.create(source_path, slug)?
         }

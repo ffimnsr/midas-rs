@@ -1,6 +1,6 @@
 [package]
 name = "midas"
-version = "0.5.4"
+version = "0.5.9"
 authors = ["ffimnsr <ffimnsr@gmail.com>"]
 edition = "2018"
 readme = "README.md"
@@ -16,7 +16,6 @@ exclude = [".gitignore"]
 clap = "2.33"
 postgres = "0.19"
 regex = "1.5"
-failure = "0.1"
 dotenv = "0.15"
 tracing = "0.1"
 tracing-subscriber = { version = "0.2", features = ["tracing-log"] }

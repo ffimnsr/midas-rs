@@ -5,7 +5,6 @@ use std::io::BufReader;
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use failure::{bail, Error};
 use log::debug;
 use regex::Regex;
 
@@ -27,26 +26,26 @@ impl MigrationFile {
 
 pub type MigrationFiles = BTreeMap<i64, MigrationFile>;
 
-fn parse_file(filename: &str) -> Result<MigrationFile, Error> {
-    let re = Regex::new(r"^(?P<number>[0-9]{13})_(?P<name>[_0-9a-zA-Z]*)\.sql$").unwrap();
+fn parse_file(filename: &str) -> Result<MigrationFile, super::GenericError> {
+    let re = Regex::new(r"^(?P<number>[0-9]{13})_(?P<name>[_0-9a-zA-Z]*)\.sql$")?;
 
     let res = match re.captures(filename) {
-        None => bail!("Invalid filename found on {}", filename),
+        None => return Err(format!("Invalid filename found on {}", filename).into()),
         Some(c) => c,
     };
 
-    let number = res.name("number").unwrap().as_str().parse::<i64>().unwrap();
+    let number = res.name("number").ok_or("The migration file timestamp is malformed")?.as_str().parse::<i64>()?;
 
     Ok(MigrationFile::new(filename, number))
 }
 
-pub fn build_migration_list(path: &Path) -> Result<MigrationFiles, Error> {
+pub fn build_migration_list(path: &Path) -> Result<MigrationFiles, super::GenericError> {
     let mut files: MigrationFiles = BTreeMap::new();
 
     for entry in read_dir(path)? {
         let entry = entry?;
         let filename = entry.file_name();
-        let info = match parse_file(filename.to_str().unwrap()) {
+        let info = match parse_file(filename.to_str().ok_or("Filename is invalid")?) {
             Ok(info) => info,
             Err(_) => continue,
         };
@@ -58,8 +57,10 @@ pub fn build_migration_list(path: &Path) -> Result<MigrationFiles, Error> {
 
         let split_vec: Vec<String> = content.split("\n").map(|s| s.to_string()).collect();
 
-        let pos_up = split_vec.iter().position(|s| s == "-- !UP" || s == "-- !UP\r").unwrap();
-        let pos_down = split_vec.iter().position(|s| s == "-- !DOWN" || s == "-- !DOWN\r").unwrap();
+        let pos_up = split_vec.iter().position(|s| s == "-- !UP" || s == "-- !UP\r")
+            .ok_or("Parser can't find the UP migration")?;
+        let pos_down = split_vec.iter().position(|s| s == "-- !DOWN" || s == "-- !DOWN\r")
+            .ok_or("Parser can't find the DOWN migration")?;
 
         let content_up = &split_vec[(pos_up + 1)..pos_down];
         let content_down = &split_vec[(pos_down + 1)..];
@@ -83,7 +84,7 @@ fn timestamp() -> String {
     since_the_epoch.as_millis().to_string()
 }
 
-pub fn create_migration_file(path: &Path, slug: &str) -> Result<(), Error> {
+pub fn create_migration_file(path: &Path, slug: &str) -> Result<(), super::GenericError> {
     let filename = timestamp() + "_" + slug + ".sql";
     let filepath = path.join(filename.clone());
 

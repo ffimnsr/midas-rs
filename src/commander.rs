@@ -1,7 +1,6 @@
 use std::iter::Iterator;
 use std::path::Path;
 
-use failure::Error;
 use log::trace;
 
 use crate::lookup::{self, MigrationFiles, VecStr};
@@ -23,14 +22,14 @@ impl<T: SequelDriver + 'static> Migrator<T> {
         Self { executor, migrations }
     }
 
-    pub fn create(&mut self, path: &Path, slug: &str) -> Result<(), Error> {
+    pub fn create(&mut self, path: &Path, slug: &str) -> Result<(), super::GenericError> {
         let fixed_slug = slug.to_ascii_lowercase().replace(" ", "_");
         let _ = lookup::create_migration_file(path, &fixed_slug)?;
 
         Ok(())
     }
 
-    pub fn status(&mut self) -> Result<(), Error> {
+    pub fn status(&mut self) -> Result<(), super::GenericError> {
         let completed_migrations = self.executor.get_completed_migrations()?;
         let available_migrations = self.migrations.keys().cloned().collect::<VecSerial>();
 
@@ -59,7 +58,7 @@ impl<T: SequelDriver + 'static> Migrator<T> {
         Ok(())
     }
 
-    pub fn up(&mut self) -> Result<(), Error> {
+    pub fn up(&mut self) -> Result<(), super::GenericError> {
         let completed_migrations = self.executor.get_completed_migrations()?;
         let available_migrations = self.migrations.keys().cloned().collect::<VecSerial>();
 
@@ -94,7 +93,7 @@ impl<T: SequelDriver + 'static> Migrator<T> {
         Ok(())
     }
 
-    pub fn down(&mut self) -> Result<(), Error> {
+    pub fn down(&mut self) -> Result<(), super::GenericError> {
         let completed_migrations = self.executor.get_completed_migrations()?;
         if completed_migrations.is_empty() {
             println!("Migrations table is empty. No need to run down migrations.");
@@ -116,11 +115,11 @@ impl<T: SequelDriver + 'static> Migrator<T> {
         Ok(())
     }
 
-    pub fn redo(&mut self) -> Result<(), Error> {
+    pub fn redo(&mut self) -> Result<(), super::GenericError> {
         let mut current = self.executor.get_last_completed_migration()?;
 
         let current_state = current;
-        if current == -1 {
+        if current_state == -1 {
             current = 0;
         }
 
@@ -147,7 +146,7 @@ impl<T: SequelDriver + 'static> Migrator<T> {
         Ok(())
     }
 
-    pub fn revert(&mut self) -> Result<(), Error> {
+    pub fn revert(&mut self) -> Result<(), super::GenericError> {
         let current = self.executor.get_last_completed_migration()?;
         if current == -1 {
             println!("Migrations table is empty. No need to run revert migrations.");
@@ -164,12 +163,12 @@ impl<T: SequelDriver + 'static> Migrator<T> {
         Ok(())
     }
 
-    pub fn setup(&self) -> Result<(), Error> {
+    pub fn setup(&self) -> Result<(), super::GenericError> {
         println!("Not Useable. Currently this is a placeholder command.");
         Ok(())
     }
 
-    pub fn drop(&self) -> Result<(), Error> {
+    pub fn drop(&self) -> Result<(), super::GenericError> {
         println!("Not Useable. Currently this is a placeholder command.");
         Ok(())
     }
