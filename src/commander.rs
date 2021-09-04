@@ -1,3 +1,5 @@
+use std::fs::{self, File};
+use std::io::Write;
 use std::iter::Iterator;
 use std::path::Path;
 
@@ -163,13 +165,26 @@ impl<T: SequelDriver + 'static> Migrator<T> {
         Ok(())
     }
 
-    pub fn setup(&self) -> Result<(), super::GenericError> {
-        println!("Not Useable. Currently this is a placeholder command.");
+    pub fn init(&self) -> Result<(), super::GenericError> {
+        let filename = ".env.midas";
+        let filepath = std::env::current_dir()?.join(filename);
+
+        log::debug!("Creating new env file: {:?}", filepath);
+
+        let mut f = File::create(filepath)?;
+        let contents = "\
+            DSN=postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable\n\
+            MIGRATIONS_ROOT=./data/migrations\n";
+        f.write_all(contents.as_bytes())?;
+        f.sync_all()?;
+
+        fs::create_dir_all("./data/migrations")?;
+
         Ok(())
     }
 
     pub fn drop(&self) -> Result<(), super::GenericError> {
-        println!("Not Useable. Currently this is a placeholder command.");
+        println!("Currently this is a placeholder command, usually you only need to run `DROP DATABASE <dbname>`.");
         Ok(())
     }
 }

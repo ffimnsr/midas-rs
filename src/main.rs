@@ -63,7 +63,7 @@ fn main() -> Result<(), GenericError> {
         .subcommand(SubCommand::with_name("redo").about("Redo the last migration"))
         .subcommand(SubCommand::with_name("revert").about("Reverts the last migration"))
         .subcommand(
-            SubCommand::with_name("setup")
+            SubCommand::with_name("init")
                 .about("Setups and creates the database must have privilege user"),
         )
         .subcommand(SubCommand::with_name("drop").about("Drops everything inside the database"))
@@ -102,7 +102,7 @@ fn main() -> Result<(), GenericError> {
         Some("down") => migrator.down()?,
         Some("redo") => migrator.redo()?,
         Some("revert") => migrator.revert()?,
-        Some("setup") => migrator.setup()?,
+        Some("init") => migrator.init()?,
         Some("drop") => migrator.drop()?,
         None => println!("No subcommand provided"),
         _ => println!("Invalid subcommand provided"),
