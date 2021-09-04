@@ -111,7 +111,14 @@ impl<T: SequelDriver + 'static> Migrator<T> {
             trace!("Running the following down query: {:?}", content_down);
 
             self.executor.migrate(&content_down)?;
-            self.executor.delete_completed_migration(it.to_owned())?;
+
+            if !std::env::var("MIGRATIONS_SKIP_LAST").is_err() {
+                if !completed_migrations.first().eq(&Some(it)) {
+                    self.executor.delete_completed_migration(it.to_owned())?;
+                }
+            } else {
+                self.executor.delete_completed_migration(it.to_owned())?;
+            }
         }
 
         Ok(())
@@ -149,6 +156,7 @@ impl<T: SequelDriver + 'static> Migrator<T> {
     }
 
     pub fn revert(&mut self) -> Result<(), super::GenericError> {
+        let migrations_count = self.executor.count_migrations()?;
         let current = self.executor.get_last_completed_migration()?;
         if current == -1 {
             println!("Migrations table is empty. No need to run revert migrations.");
@@ -161,7 +169,14 @@ impl<T: SequelDriver + 'static> Migrator<T> {
         let content_down = get_content_string!(content_down);
 
         self.executor.migrate(&content_down)?;
-        self.executor.delete_last_completed_migration()?;
+
+        if !std::env::var("MIGRATIONS_SKIP_LAST").is_err() {
+            if migrations_count > 1 {
+                self.executor.delete_last_completed_migration()?;
+            }
+        } else {
+            self.executor.delete_last_completed_migration()?;
+        }
         Ok(())
     }
 
