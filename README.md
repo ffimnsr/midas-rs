@@ -1,4 +1,4 @@
-# Midas
+# Midas (cargo-migrate)
 
 [![Crates.io Package](https://img.shields.io/crates/v/midas?style=flat-square)](https://crates.io/crates/midas)
 [![Crates.io Downloads](https://img.shields.io/crates/d/midas?style=flat-square)](https://crates.io/crates/midas)
@@ -29,6 +29,8 @@ Here is a sample command line usage of `midas`.
 midas --database postgres://postgres@localhost:5432/postgres --source migrations up
 ```
 
+or you could also use the `cargo migrate` to integrate it on your cargo workflow.
+
 The command will execute all **special** (up) SQL migrations files to the database. \
 Here are the available subcommands:
 
@@ -38,7 +40,7 @@ down      Remove all applied migrations
 drop      Drops everything inside the database
 redo      Redo the last migration
 revert    Reverts the last migration
-setup     Setups and creates the database must have privilege user
+init      Setups and creates initial file directory and env
 status    Checks the status of the migration
 up        Apply all non-applied migrations
 ```

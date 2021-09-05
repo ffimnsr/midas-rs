@@ -1,6 +1,6 @@
 [package]
 name = "midas"
-version = "0.5.11"
+version = "0.5.12"
 authors = ["ffimnsr <ffimnsr@gmail.com>"]
 edition = "2018"
 readme = "README.md"
@@ -11,6 +11,14 @@ repository = "https://github.com/ffimnsr/midas"
 license = "MIT OR Apache-2.0"
 keywords = ["migrations", "database", "postgres", "migrate", "cli"]
 exclude = [".gitignore"]
+
+[[bin]]
+name = "cargo-migrate"
+path = "src/main.rs"
+
+[[bin]]
+name = "midas"
+path = "src/midas.rs"
 
 [dependencies]
 clap = "2.33"
