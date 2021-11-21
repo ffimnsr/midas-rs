@@ -2,7 +2,7 @@
 name = "midas"
 version = "0.5.12"
 authors = ["ffimnsr <ffimnsr@gmail.com>"]
-edition = "2018"
+edition = "2021"
 readme = "README.md"
 description = "Do painless migration."
 categories = ["command-line-utilities", "development-tools"]
