@@ -34,7 +34,11 @@ fn parse_file(filename: &str) -> Result<MigrationFile, super::GenericError> {
         Some(c) => c,
     };
 
-    let number = res.name("number").ok_or("The migration file timestamp is malformed")?.as_str().parse::<i64>()?;
+    let number = res
+        .name("number")
+        .ok_or("The migration file timestamp is malformed")?
+        .as_str()
+        .parse::<i64>()?;
 
     Ok(MigrationFile::new(filename, number))
 }
@@ -57,9 +61,13 @@ pub fn build_migration_list(path: &Path) -> Result<MigrationFiles, super::Generi
 
         let split_vec: Vec<String> = content.split("\n").map(|s| s.to_string()).collect();
 
-        let pos_up = split_vec.iter().position(|s| s == "-- !UP" || s == "-- !UP\r")
+        let pos_up = split_vec
+            .iter()
+            .position(|s| s == "-- !UP" || s == "-- !UP\r")
             .ok_or("Parser can't find the UP migration")?;
-        let pos_down = split_vec.iter().position(|s| s == "-- !DOWN" || s == "-- !DOWN\r")
+        let pos_down = split_vec
+            .iter()
+            .position(|s| s == "-- !DOWN" || s == "-- !DOWN\r")
             .ok_or("Parser can't find the DOWN migration")?;
 
         let content_up = &split_vec[(pos_up + 1)..pos_down];

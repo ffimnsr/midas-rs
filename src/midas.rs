@@ -1,5 +1,5 @@
-mod commander;
 mod cli;
+mod commander;
 mod lookup;
 mod sequel;
 

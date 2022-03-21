@@ -1,8 +1,8 @@
+use log::debug;
 #[allow(unused_imports)]
 use std::env;
 use std::path::Path;
 use std::time::Instant;
-use log::debug;
 
 use clap::{App, AppSettings, Arg, SubCommand};
 
@@ -70,8 +70,12 @@ pub(crate) fn midas_entry(command_name: &str, sub_command: bool) -> Result<(), G
         .subcommand(SubCommand::with_name("drop").about("Drops everything inside the database"));
 
     let matches = if sub_command {
-        let internal_matches = App::new("cargo").bin_name("cargo").subcommand(cli_app).get_matches();
-        internal_matches.subcommand_matches(command_name).ok_or(format!("cargo-{} not invoked via cargo command", command_name))?.to_owned()
+        let internal_matches =
+            App::new("cargo").bin_name("cargo").subcommand(cli_app).get_matches();
+        internal_matches
+            .subcommand_matches(command_name)
+            .ok_or(format!("cargo-{} not invoked via cargo command", command_name))?
+            .to_owned()
     } else {
         cli_app.get_matches()
     };
@@ -81,8 +85,7 @@ pub(crate) fn midas_entry(command_name: &str, sub_command: bool) -> Result<(), G
 
     let database_url = matches.value_of("database").unwrap_or(&env_db_url);
 
-    let env_source_path = env::var("MIGRATIONS_ROOT")
-        .unwrap_or("migrations".into());
+    let env_source_path = env::var("MIGRATIONS_ROOT").unwrap_or("migrations".into());
 
     debug!("Using DSN: {}", database_url);
 
@@ -97,7 +100,8 @@ pub(crate) fn midas_entry(command_name: &str, sub_command: bool) -> Result<(), G
 
     match matches.subcommand_name() {
         Some("create") => {
-            let slug = matches.subcommand_matches("create")
+            let slug = matches
+                .subcommand_matches("create")
                 .ok_or("No slug was detected")?
                 .value_of("name")
                 .ok_or("Slug is either malformed or undecipherable")?;
