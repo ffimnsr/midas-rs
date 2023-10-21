@@ -150,6 +150,9 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - build-release-package
+    env:
+      REGISTRY: ghcr.io
+      IMAGE_NAME: ${{ github.repository }}
     permissions:
       contents: read
       packages: write
