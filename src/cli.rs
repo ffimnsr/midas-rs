@@ -6,8 +6,8 @@ use std::time::Instant;
 
 use clap::{App, AppSettings, Arg, SubCommand};
 
-const PKG_VERSION: &'static str = env!("CARGO_PKG_VERSION");
-const PKG_DESCRIPTION: &'static str = env!("CARGO_PKG_DESCRIPTION");
+const PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
+const PKG_DESCRIPTION: &str = env!("CARGO_PKG_DESCRIPTION");
 
 use super::commander::Migrator;
 use super::sequel::postgres::Postgres;
@@ -101,10 +101,9 @@ pub(crate) fn midas_entry(
         internal_matches
             .subcommand_matches(command_name)
             .ok_or(format!(
-                "cargo-{} not invoked via cargo command",
-                command_name
+                "cargo-{command_name} not invoked via cargo command",
             ))?
-            .to_owned()
+            .clone()
     } else {
         cli_app.get_matches()
     };
@@ -137,7 +136,7 @@ pub(crate) fn midas_entry(
                 .value_of("name")
                 .ok_or("Slug is either malformed or undecipherable")?;
 
-            migrator.create(source_path, slug)?
+            migrator.create(source_path, slug)?;
         }
         Some("status") => migrator.status()?,
         Some("up") => migrator.up()?,

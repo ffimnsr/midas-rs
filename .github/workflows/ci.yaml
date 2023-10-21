@@ -1,3 +1,5 @@
+# Reference from here:
+# https://github.com/dtolnay/syn/blob/master/.github/workflows/ci.yml
 name: ci
 on:
   pull_request:
@@ -5,7 +7,7 @@ on:
     branches:
       - master
   schedule:
-    - cron: '00 01 * * *'
+    - cron: '0 1 * * *'
 
 permissions:
   contents: read
@@ -15,8 +17,21 @@ env:
   RUSTFLAGS: -Dwarnings
 
 jobs:
+  check-pass:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+          components: rustc-dev
+      - name: Run cargo check tool
+        run: cargo check --all-targets --all-features --tests --benches --release --verbose
   test:
     runs-on: ${{ matrix.os }}
+    needs:
+      - check-pass
     env:
       CARGO: cargo
       TARGET_FLAGS: ""
@@ -71,6 +86,7 @@ jobs:
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.rust }}
+          components: llvm-tools, rustc-dev
       - name: Use cross compiler
         if: matrix.os == 'ubuntu-latest' && matrix.target != ''
         run: |
@@ -107,3 +123,19 @@ jobs:
           components: rustfmt
       - name: Check formatting
         run: cargo fmt --all --check
+  clippy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+          components: clippy, rustc-dev
+      - run: cargo clippy --all-features --all-targets --tests --benches -- -Dclippy::all
+  # outdated:
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: dtolnay/install@cargo-outdated
+  #     - run: cargo outdated --exit-code 1

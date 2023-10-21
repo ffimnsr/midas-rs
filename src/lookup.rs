@@ -37,9 +37,7 @@ fn parse_file(filename: &str) -> Result<MigrationFile, super::GenericError> {
 
     let res = match re.captures(filename) {
         None => {
-            return Err(
-                format!("Invalid filename found on {}", filename).into()
-            )
+            return Err(format!("Invalid filename found on {filename}").into())
         }
         Some(c) => c,
     };
@@ -61,11 +59,10 @@ pub fn build_migration_list(
     for entry in read_dir(path)? {
         let entry = entry?;
         let filename = entry.file_name();
-        let info = match parse_file(
-            filename.to_str().ok_or("Filename is invalid")?,
-        ) {
-            Ok(info) => info,
-            Err(_) => continue,
+        let Ok(info) =
+            parse_file(filename.to_str().ok_or("Filename is invalid")?)
+        else {
+            continue;
         };
 
         let file = File::open(entry.path())?;
@@ -73,8 +70,10 @@ pub fn build_migration_list(
         let mut content = String::new();
         buf_reader.read_to_string(&mut content)?;
 
-        let split_vec: Vec<String> =
-            content.split("\n").map(|s| s.to_string()).collect();
+        let split_vec: Vec<String> = content
+            .split('\n')
+            .map(std::string::ToString::to_string)
+            .collect();
 
         let pos_up = split_vec
             .iter()

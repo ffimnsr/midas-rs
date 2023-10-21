@@ -52,7 +52,7 @@ For more info see `--help`.
 
 If you're into **Rust** then you can use `cargo` to install.
 
-* The minimum supported version of Rust is 1.37.0.
+* The minimum supported version of Rust is `1.37.0`.
 
 ```shellbash
 cargo install midas

@@ -3,7 +3,7 @@ pub mod postgres;
 
 pub type VecSerial = Vec<i64>;
 
-pub trait SequelDriver {
+pub trait Driver {
     fn ensure_migration_schema_exists(&mut self) -> Result<(), Error>;
     fn ensure_migration_table_exists(&mut self) -> Result<(), Error>;
     fn drop_migration_table(&mut self) -> Result<(), Error>;

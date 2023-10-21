@@ -1,7 +1,7 @@
 use log::trace;
 use postgres::{Client, NoTls};
 
-use super::{Error, SequelDriver, VecSerial};
+use super::{Driver as SequelDriver, Error, VecSerial};
 
 pub struct Postgres {
     client: Client,
@@ -98,7 +98,7 @@ impl SequelDriver for Postgres {
     }
 
     fn migrate(&mut self, query: &str) -> Result<(), Error> {
-        self.client.simple_query(&query)?;
+        self.client.simple_query(query)?;
         Ok(())
     }
 }
