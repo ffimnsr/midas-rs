@@ -104,7 +104,7 @@ jobs:
         if: matrix.build == 'linux' || matrix.os == 'macos'
         run: |
           strip "target/${{ matrix.target }}/release/midas"
-          strip "target/${{ matrix.target }}/release/cargo-migrate
+          strip "target/${{ matrix.target }}/release/cargo-migrate"
       - name: Strip release binary (arm)
         if: matrix.build == 'linux-arm'
         run: |
