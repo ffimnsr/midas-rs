@@ -38,7 +38,8 @@ impl SequelDriver for Postgres {
 
     fn count_migrations(&mut self) -> Result<i64, Error> {
         trace!("Retrieving migrations count");
-        let payload = "SELECT COUNT(*) as count FROM public.__schema_migrations";
+        let payload =
+            "SELECT COUNT(*) as count FROM public.__schema_migrations";
         let row = self.client.query_one(payload, &[])?;
         let result = row.get::<_, i64>(0);
         Ok(result)
@@ -46,15 +47,18 @@ impl SequelDriver for Postgres {
 
     fn get_completed_migrations(&mut self) -> Result<VecSerial, Error> {
         trace!("Retrieving all completed migrations");
-        let payload = "SELECT migration FROM public.__schema_migrations ORDER BY id ASC";
+        let payload =
+            "SELECT migration FROM public.__schema_migrations ORDER BY id ASC";
         let it = self.client.query(payload, &[])?;
-        let result = it.iter().map(|r| r.get("migration")).collect::<VecSerial>();
+        let result =
+            it.iter().map(|r| r.get("migration")).collect::<VecSerial>();
         Ok(result)
     }
 
     fn get_last_completed_migration(&mut self) -> Result<i64, Error> {
         trace!("Checking and retrieving the last migration stored on migrations table");
-        let payload = "SELECT migration FROM public.__schema_migrations ORDER BY id DESC LIMIT 1";
+        let payload =
+            "SELECT migration FROM public.__schema_migrations ORDER BY id DESC LIMIT 1";
         let result = self.client.query(payload, &[])?;
 
         if result.is_empty() {
@@ -64,16 +68,24 @@ impl SequelDriver for Postgres {
         }
     }
 
-    fn add_completed_migration(&mut self, migration_number: i64) -> Result<(), Error> {
+    fn add_completed_migration(
+        &mut self,
+        migration_number: i64,
+    ) -> Result<(), Error> {
         trace!("Adding migration to migrations table");
-        let payload = "INSERT INTO public.__schema_migrations (migration) VALUES ($1)";
+        let payload =
+            "INSERT INTO public.__schema_migrations (migration) VALUES ($1)";
         self.client.execute(payload, &[&migration_number])?;
         Ok(())
     }
 
-    fn delete_completed_migration(&mut self, migration_number: i64) -> Result<(), Error> {
+    fn delete_completed_migration(
+        &mut self,
+        migration_number: i64,
+    ) -> Result<(), Error> {
         trace!("Removing a migration in the migrations table");
-        let payload = "DELETE FROM public.__schema_migrations WHERE migration = $1";
+        let payload =
+            "DELETE FROM public.__schema_migrations WHERE migration = $1";
         self.client.execute(payload, &[&migration_number])?;
         Ok(())
     }

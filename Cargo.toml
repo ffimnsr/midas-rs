@@ -1,10 +1,10 @@
 [package]
 name = "midas"
 version = "0.5.12"
-authors = ["ffimnsr <ffimnsr@gmail.com>"]
+authors = ["Edward Fitz Abucay gh:@ffimnsr"]
 edition = "2021"
 readme = "README.md"
-description = "Do painless migration."
+description = "Do painless migration 🦀"
 categories = ["command-line-utilities", "development-tools"]
 homepage = "https://github.com/ffimnsr/midas"
 repository = "https://github.com/ffimnsr/midas"

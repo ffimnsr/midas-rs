@@ -10,7 +10,12 @@ use crate::sequel::{SequelDriver, VecSerial};
 
 macro_rules! get_content_string {
     ($content: ident) => {
-        $content.iter().filter(|&l| l != "").map(|s| s.to_owned()).collect::<VecStr>().join("\n")
+        $content
+            .iter()
+            .filter(|&l| l != "")
+            .map(|s| s.to_owned())
+            .collect::<VecStr>()
+            .join("\n")
     };
 }
 
@@ -24,7 +29,11 @@ impl<T: SequelDriver + 'static> Migrator<T> {
         Self { executor, migrations }
     }
 
-    pub fn create(&mut self, path: &Path, slug: &str) -> Result<(), super::GenericError> {
+    pub fn create(
+        &mut self,
+        path: &Path,
+        slug: &str,
+    ) -> Result<(), super::GenericError> {
         let fixed_slug = slug.to_ascii_lowercase().replace(" ", "_");
         let _ = lookup::create_migration_file(path, &fixed_slug)?;
 
@@ -33,7 +42,8 @@ impl<T: SequelDriver + 'static> Migrator<T> {
 
     pub fn status(&mut self) -> Result<(), super::GenericError> {
         let completed_migrations = self.executor.get_completed_migrations()?;
-        let available_migrations = self.migrations.keys().cloned().collect::<VecSerial>();
+        let available_migrations =
+            self.migrations.keys().cloned().collect::<VecSerial>();
 
         if available_migrations.is_empty() {
             println!("There are no available migration files.");
@@ -62,7 +72,8 @@ impl<T: SequelDriver + 'static> Migrator<T> {
 
     pub fn up(&mut self) -> Result<(), super::GenericError> {
         let completed_migrations = self.executor.get_completed_migrations()?;
-        let available_migrations = self.migrations.keys().cloned().collect::<VecSerial>();
+        let available_migrations =
+            self.migrations.keys().cloned().collect::<VecSerial>();
 
         if available_migrations.is_empty() {
             println!("There are no available migration files.");
@@ -98,7 +109,9 @@ impl<T: SequelDriver + 'static> Migrator<T> {
     pub fn down(&mut self) -> Result<(), super::GenericError> {
         let completed_migrations = self.executor.get_completed_migrations()?;
         if completed_migrations.is_empty() {
-            println!("Migrations table is empty. No need to run down migrations.");
+            println!(
+                "Migrations table is empty. No need to run down migrations."
+            );
             return Ok(());
         }
 
@@ -135,7 +148,10 @@ impl<T: SequelDriver + 'static> Migrator<T> {
         let migration = self.migrations.get(&current).unwrap();
 
         if current_state != -1 {
-            println!("[{:013}] Clearing recent migration from database.", current);
+            println!(
+                "[{:013}] Clearing recent migration from database.",
+                current
+            );
             let content_down = migration.content_down.as_ref().unwrap();
             let content_down = get_content_string!(content_down);
 
@@ -145,7 +161,10 @@ impl<T: SequelDriver + 'static> Migrator<T> {
 
         trace!("Running the method `redo` {:?}", migration);
 
-        println!("[{:013}] Applying recent migration in the database.", current);
+        println!(
+            "[{:013}] Applying recent migration in the database.",
+            current
+        );
         let content_up = migration.content_up.as_ref().unwrap();
         let content_up = get_content_string!(content_up);
 
@@ -159,7 +178,9 @@ impl<T: SequelDriver + 'static> Migrator<T> {
         let migrations_count = self.executor.count_migrations()?;
         let current = self.executor.get_last_completed_migration()?;
         if current == -1 {
-            println!("Migrations table is empty. No need to run revert migrations.");
+            println!(
+                "Migrations table is empty. No need to run revert migrations."
+            );
             return Ok(());
         }
 

@@ -14,7 +14,10 @@ use super::sequel::postgres::Postgres;
 
 pub(crate) type GenericError = Box<dyn std::error::Error + Send + Sync>;
 
-pub(crate) fn midas_entry(command_name: &str, sub_command: bool) -> Result<(), GenericError> {
+pub(crate) fn midas_entry(
+    command_name: &str,
+    sub_command: bool,
+) -> Result<(), GenericError> {
     dotenv::dotenv().ok();
 
     if env::var("RUST_LOG").is_err() {
@@ -56,36 +59,64 @@ pub(crate) fn midas_entry(command_name: &str, sub_command: bool) -> Result<(), G
         .subcommand(
             SubCommand::with_name("create")
                 .about("Creates a timestamped migration file")
-                .arg(Arg::with_name("name").help("The migration action name").required(true)),
+                .arg(
+                    Arg::with_name("name")
+                        .help("The migration action name")
+                        .required(true),
+                ),
         )
-        .subcommand(SubCommand::with_name("status").about("Checks the status of the migration"))
-        .subcommand(SubCommand::with_name("up").about("Apply all non-applied migrations"))
-        .subcommand(SubCommand::with_name("down").about("Remove all applied migrations"))
-        .subcommand(SubCommand::with_name("redo").about("Redo the last migration"))
-        .subcommand(SubCommand::with_name("revert").about("Reverts the last migration"))
+        .subcommand(
+            SubCommand::with_name("status")
+                .about("Checks the status of the migration"),
+        )
+        .subcommand(
+            SubCommand::with_name("up")
+                .about("Apply all non-applied migrations"),
+        )
+        .subcommand(
+            SubCommand::with_name("down")
+                .about("Remove all applied migrations"),
+        )
+        .subcommand(
+            SubCommand::with_name("redo").about("Redo the last migration"),
+        )
+        .subcommand(
+            SubCommand::with_name("revert")
+                .about("Reverts the last migration"),
+        )
         .subcommand(
             SubCommand::with_name("init")
                 .about("Setups and creates initial file directory and env"),
         )
-        .subcommand(SubCommand::with_name("drop").about("Drops everything inside the database"));
+        .subcommand(
+            SubCommand::with_name("drop")
+                .about("Drops everything inside the database"),
+        );
 
     let matches = if sub_command {
-        let internal_matches =
-            App::new("cargo").bin_name("cargo").subcommand(cli_app).get_matches();
+        let internal_matches = App::new("cargo")
+            .bin_name("cargo")
+            .subcommand(cli_app)
+            .get_matches();
         internal_matches
             .subcommand_matches(command_name)
-            .ok_or(format!("cargo-{} not invoked via cargo command", command_name))?
+            .ok_or(format!(
+                "cargo-{} not invoked via cargo command",
+                command_name
+            ))?
             .to_owned()
     } else {
         cli_app.get_matches()
     };
 
-    let env_db_url = env::var("DSN")
-        .unwrap_or("postgres://postgres@localhost:5432/postgres?sslmode=disable".into());
+    let env_db_url = env::var("DSN").unwrap_or(
+        "postgres://postgres@localhost:5432/postgres?sslmode=disable".into(),
+    );
 
     let database_url = matches.value_of("database").unwrap_or(&env_db_url);
 
-    let env_source_path = env::var("MIGRATIONS_ROOT").unwrap_or("migrations".into());
+    let env_source_path =
+        env::var("MIGRATIONS_ROOT").unwrap_or("migrations".into());
 
     debug!("Using DSN: {}", database_url);
 

@@ -20,17 +20,27 @@ pub struct MigrationFile {
 
 impl MigrationFile {
     fn new(filename: &str, number: i64) -> Self {
-        Self { content_up: None, content_down: None, filename: filename.to_owned(), number }
+        Self {
+            content_up: None,
+            content_down: None,
+            filename: filename.to_owned(),
+            number,
+        }
     }
 }
 
 pub type MigrationFiles = BTreeMap<i64, MigrationFile>;
 
 fn parse_file(filename: &str) -> Result<MigrationFile, super::GenericError> {
-    let re = Regex::new(r"^(?P<number>[0-9]{13})_(?P<name>[_0-9a-zA-Z]*)\.sql$")?;
+    let re =
+        Regex::new(r"^(?P<number>[0-9]{13})_(?P<name>[_0-9a-zA-Z]*)\.sql$")?;
 
     let res = match re.captures(filename) {
-        None => return Err(format!("Invalid filename found on {}", filename).into()),
+        None => {
+            return Err(
+                format!("Invalid filename found on {}", filename).into()
+            )
+        }
         Some(c) => c,
     };
 
@@ -43,13 +53,17 @@ fn parse_file(filename: &str) -> Result<MigrationFile, super::GenericError> {
     Ok(MigrationFile::new(filename, number))
 }
 
-pub fn build_migration_list(path: &Path) -> Result<MigrationFiles, super::GenericError> {
+pub fn build_migration_list(
+    path: &Path,
+) -> Result<MigrationFiles, super::GenericError> {
     let mut files: MigrationFiles = BTreeMap::new();
 
     for entry in read_dir(path)? {
         let entry = entry?;
         let filename = entry.file_name();
-        let info = match parse_file(filename.to_str().ok_or("Filename is invalid")?) {
+        let info = match parse_file(
+            filename.to_str().ok_or("Filename is invalid")?,
+        ) {
             Ok(info) => info,
             Err(_) => continue,
         };
@@ -59,7 +73,8 @@ pub fn build_migration_list(path: &Path) -> Result<MigrationFiles, super::Generi
         let mut content = String::new();
         buf_reader.read_to_string(&mut content)?;
 
-        let split_vec: Vec<String> = content.split("\n").map(|s| s.to_string()).collect();
+        let split_vec: Vec<String> =
+            content.split("\n").map(|s| s.to_string()).collect();
 
         let pos_up = split_vec
             .iter()
@@ -92,7 +107,10 @@ fn timestamp() -> String {
     since_the_epoch.as_millis().to_string()
 }
 
-pub fn create_migration_file(path: &Path, slug: &str) -> Result<(), super::GenericError> {
+pub fn create_migration_file(
+    path: &Path,
+    slug: &str,
+) -> Result<(), super::GenericError> {
     let filename = timestamp() + "_" + slug + ".sql";
     let filepath = path.join(filename.clone());
 
