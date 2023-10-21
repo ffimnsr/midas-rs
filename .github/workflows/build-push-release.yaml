@@ -39,7 +39,6 @@ jobs:
   build-release-package:
     runs-on: ${{ matrix.os }}
     needs:
-      - check-release
       - create-release
     env:
       CARGO: cargo
@@ -48,7 +47,13 @@ jobs:
       RUST_BACKTRACE: 1
     strategy:
       matrix:
-        build: [linux, linux-arm, macos, win-msvc, win-gnu, win32-msvc]
+        build:
+          - linux
+          - linux-arm
+          - macos
+          # - win-msvc
+          # - win-gnu
+          # - win32-msvc
         include:
           - build: linux
             os: ubuntu-latest
