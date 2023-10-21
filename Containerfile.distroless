@@ -1,0 +1,18 @@
+FROM docker.io/library/rust:latest AS builder
+WORKDIR /usr/src
+
+RUN rustup target add x86_64-unknown-linux-musl
+
+RUN cargo new midas-app
+WORKDIR /usr/src/midas-app
+COPY Cargo.toml Cargo.lock ./
+COPY src ./src
+RUN cargo build --target x86_64-unknown-linux-musl --release
+
+FROM gcr.io/distroless/cc:latest
+WORKDIR /app
+COPY --from=builder /usr/src/midas-app/target/x86_64-unknown-linux-musl/release/midas /app/
+COPY --from=builder /usr/src/midas-app/target/x86_64-unknown-linux-musl/release/cargo-migrate /app/
+COPY COPYRIGHT LICENSE-APACHE LICENSE-MIT /app/
+USER 1000
+ENTRYPOINT ["/app/midas"]

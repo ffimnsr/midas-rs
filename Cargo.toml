@@ -1,6 +1,6 @@
 [package]
 name = "midas"
-version = "0.5.16"
+version = "0.5.17"
 authors = ["Edward Fitz Abucay gh:@ffimnsr"]
 edition = "2021"
 readme = "README.md"
