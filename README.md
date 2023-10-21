@@ -3,7 +3,8 @@
 [![Crates.io Package](https://img.shields.io/crates/v/midas?style=flat-square)](https://crates.io/crates/midas)
 [![Crates.io Downloads](https://img.shields.io/crates/d/midas?style=flat-square)](https://crates.io/crates/midas)
 [![License](https://img.shields.io/crates/l/midas?style=flat-square)](https://github.com/ffimnsr/midas-rs/blob/master/LICENSE-APACHE)
-[![Github Workflow Status](https://img.shields.io/github/workflow/status/ffimnsr/midas-rs/midas-rs?style=flat-square)](https://github.com/ffimnsr/midas-rs)
+[![Github Workflow Status](https://img.shields.io/github/actions/workflow/status/ffimnsr/midas-rs/ci.yaml?style=flat-square)](https://github.com/ffimnsr/midas-rs/blob/master/.github/workflows/ci.yaml)
+
 
 > So Midas, king of Lydia, swelled at first with pride
 > when he found he could transform everything he touched

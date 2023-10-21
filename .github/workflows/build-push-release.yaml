@@ -110,14 +110,14 @@ jobs:
         run: |
           docker run --rm -v \
             "$PWD/target:/target:Z" \
-            ghcr.io/cross-rs/arm-unknown-linux-gnueabihf:edge \
-            arm-linux-gnueabihf-strip \
-            /target/arm-unknown-linux-gnueabihf/release/midas
+            ghcr.io/cross-rs/${{ matrix.target }}:edge \
+            ${{ matrix.target }}-strip \
+            /target/${{ matrix.target }}/release/midas
           docker run --rm -v \
             "$PWD/target:/target:Z" \
-            ghcr.io/cross-rs/arm-unknown-linux-gnueabihf:edge \
-            arm-linux-gnueabihf-strip \
-            /target/arm-unknown-linux-gnueabihf/release/cargo-migrate
+            ghcr.io/cross-rs/${{ matrix.target }}:edge \
+            ${{ matrix.target }}-strip \
+            /target/${{ matrix.target }}/release/cargo-migrate
       - name: Build archive
         shell: bash
         run: |
