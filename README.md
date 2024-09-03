@@ -18,7 +18,14 @@ Do painless migrations.
 
 ## Supported Database
 
-Currently, the only supported database is `Postgres`.
+- [x] PostgresSQL
+- [x] CockroachDB
+- [x] MySQL
+- [x] MariaDB
+- [x] SQLite3
+- [ ] MSSQL
+- [ ] Cassandra
+- [ ] OracleDB
 
 ## Usage
 
@@ -63,7 +70,7 @@ Binary for different OS distribution can be downloaded [here](https://github.com
 ## What's in the Roadmap
 
 - [ ] TOML DSL for creating database objects
-- [ ] Setup multiple drivers (e.g. MySQL, Sqlite3, etc.)
+- [-] Setup multiple drivers (e.g. MySQL, Sqlite3, etc.)
 - [ ] Add functionality for `setup` and `drop` commands.
 - [ ] More to come.
 

@@ -10,10 +10,10 @@ pub struct Postgres {
 impl Postgres {
     pub fn new(database_url: &str) -> Result<Self, Error> {
         let client = Client::connect(database_url, NoTls)?;
-        let mut pg = Postgres { client };
-        pg.ensure_migration_schema_exists()?;
-        pg.ensure_migration_table_exists()?;
-        Ok(pg)
+        let mut db = Postgres { client };
+        db.ensure_migration_schema_exists()?;
+        db.ensure_migration_table_exists()?;
+        Ok(db)
     }
 }
 

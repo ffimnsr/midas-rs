@@ -9,7 +9,7 @@ categories = ["command-line-utilities", "development-tools"]
 homepage = "https://github.com/ffimnsr/midas"
 repository = "https://github.com/ffimnsr/midas"
 license = "MIT OR Apache-2.0"
-keywords = ["migrations", "database", "postgres", "migrate", "cli"]
+keywords = ["migrations", "database", "postgres", "mysql", "sqlite", "sqlserver", "migrate", "cli"]
 exclude = [".gitignore"]
 
 [[bin]]
@@ -21,16 +21,18 @@ name = "midas"
 path = "src/midas.rs"
 
 [dependencies]
-clap = "2.33"
+clap = { version = "4.5", features = ["string"] }
 postgres = "0.19"
-regex = "1.5"
+mysql = "25.0"
+rusqlite = "0.32"
+regex = "1.10"
 dotenv = "0.15"
 tracing = "0.1"
 tracing-subscriber = { version = "0.2", features = ["tracing-log"] }
 tracing-attributes = "0.1"
 tracing-futures = "0.2"
 log = "0.4"
-url = "2.2"
+url = "2.5"
 
 [dev-dependencies]
-tempfile = "3.2"
+tempfile = "3.12"

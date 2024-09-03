@@ -93,7 +93,7 @@ pub fn build_migration_list(
             ..info
         };
 
-        debug!("Running the migration: {:?}", migration);
+        debug!("Running the migration: {:?} {:?}", migration, migration.filename);
         files.insert(migration.number, migration);
     }
 

@@ -4,13 +4,14 @@ use std::env;
 use std::path::Path;
 use std::time::Instant;
 
-use clap::{App, AppSettings, Arg, SubCommand};
+use clap::{Command, Arg};
 
 const PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 const PKG_DESCRIPTION: &str = env!("CARGO_PKG_DESCRIPTION");
 
 use super::commander::Migrator;
 use super::sequel::postgres::Postgres;
+// use super::sequel::mysql::MySQL;
 
 pub(crate) type GenericError = Box<dyn std::error::Error + Send + Sync>;
 
@@ -28,76 +29,78 @@ pub(crate) fn midas_entry(
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .init();
 
+    let cname = command_name.to_owned();
     let mut cli_app = if sub_command {
-        SubCommand::with_name(command_name)
+        Command::new(cname.clone())
     } else {
-        App::new(command_name).bin_name(command_name)
+        Command::new(cname.clone()).bin_name(cname)
     };
 
     cli_app = cli_app
         .version(PKG_VERSION)
         .about(PKG_DESCRIPTION)
-        .setting(AppSettings::ArgRequiredElseHelp)
-        .setting(AppSettings::DisableHelpSubcommand)
-        .setting(AppSettings::GlobalVersion)
+        .arg_required_else_help(true)
+        .disable_help_subcommand(true)
+        .propagate_version(true)
         .arg(
-            Arg::with_name("database")
-                .short("d")
+            Arg::new("database")
+                .short('d')
                 .long("database")
                 .value_name("URL")
                 .help("Sets the database connection url")
-                .takes_value(true),
+                .num_args(1),
         )
         .arg(
-            Arg::with_name("source")
-                .short("s")
+            Arg::new("source")
+                .short('s')
                 .long("source")
                 .value_name("DIR")
                 .help("Sets the migration store directory")
-                .takes_value(true),
+                .num_args(1),
         )
         .subcommand(
-            SubCommand::with_name("create")
+            Command::new("create")
                 .about("Creates a timestamped migration file")
                 .arg(
-                    Arg::with_name("name")
+                    Arg::new("name")
                         .help("The migration action name")
                         .required(true),
                 ),
         )
         .subcommand(
-            SubCommand::with_name("status")
+            Command::new("status")
                 .about("Checks the status of the migration"),
         )
         .subcommand(
-            SubCommand::with_name("up")
+            Command::new("up")
                 .about("Apply all non-applied migrations"),
         )
         .subcommand(
-            SubCommand::with_name("down")
+            Command::new("down")
                 .about("Remove all applied migrations"),
         )
         .subcommand(
-            SubCommand::with_name("redo").about("Redo the last migration"),
+            Command::new("redo").about("Redo the last migration"),
         )
         .subcommand(
-            SubCommand::with_name("revert")
+            Command::new("revert")
                 .about("Reverts the last migration"),
         )
         .subcommand(
-            SubCommand::with_name("init")
+            Command::new("init")
                 .about("Setups and creates initial file directory and env"),
         )
         .subcommand(
-            SubCommand::with_name("drop")
+            Command::new("drop")
                 .about("Drops everything inside the database"),
         );
 
     let matches = if sub_command {
-        let internal_matches = App::new("cargo")
+        let internal_matches = Command::new("cargo")
             .bin_name("cargo")
             .subcommand(cli_app)
             .get_matches();
+
         internal_matches
             .subcommand_matches(command_name)
             .ok_or(format!(
@@ -112,14 +115,15 @@ pub(crate) fn midas_entry(
         "postgres://postgres@localhost:5432/postgres?sslmode=disable".into(),
     );
 
-    let database_url = matches.value_of("database").unwrap_or(&env_db_url);
+    let database_url = matches.get_one::<String>("database")
+        .unwrap_or(&env_db_url);
 
     let env_source_path =
         env::var("MIGRATIONS_ROOT").unwrap_or("migrations".into());
 
     debug!("Using DSN: {}", database_url);
 
-    let source = matches.value_of("source").unwrap_or(&env_source_path);
+    let source = matches.get_one::<String>("source").unwrap_or(&env_source_path);
     let source_path = Path::new(&source);
     let migrations = super::lookup::build_migration_list(source_path)?;
 
@@ -133,7 +137,7 @@ pub(crate) fn midas_entry(
             let slug = matches
                 .subcommand_matches("create")
                 .ok_or("No slug was detected")?
-                .value_of("name")
+                .get_one::<String>("name")
                 .ok_or("Slug is either malformed or undecipherable")?;
 
             migrator.create(source_path, slug)?;

@@ -1,11 +1,16 @@
-pub use ::postgres::Error;
+use error::Error;
+
+pub mod error;
+pub mod mysql;
 pub mod postgres;
+pub mod sqlite;
 
 pub type VecSerial = Vec<i64>;
 
 pub trait Driver {
     fn ensure_migration_schema_exists(&mut self) -> Result<(), Error>;
     fn ensure_migration_table_exists(&mut self) -> Result<(), Error>;
+    #[allow(dead_code)]
     fn drop_migration_table(&mut self) -> Result<(), Error>;
     fn count_migrations(&mut self) -> Result<i64, Error>;
     fn get_completed_migrations(&mut self) -> Result<VecSerial, Error>;
