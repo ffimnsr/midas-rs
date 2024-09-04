@@ -33,6 +33,11 @@ impl SequelDriver for Sqlite {
         Ok(())
     }
 
+    fn drop_database(&mut self, _: &str) -> Result<(), Error> {
+        // Cannot drop database in SQLite
+        Ok(())
+    }
+
     fn count_migrations(&mut self) -> Result<i64, Error> {
         trace!("Retrieving migrations count");
         let payload = "SELECT COUNT(*) as count FROM __schema_migrations";

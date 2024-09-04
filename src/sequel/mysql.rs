@@ -1,3 +1,4 @@
+use indoc::formatdoc;
 use log::trace;
 use mysql::{prelude::Queryable, params, Pool, PooledConn};
 
@@ -31,6 +32,15 @@ impl SequelDriver for Mysql {
     fn drop_migration_table(&mut self) -> Result<(), Error> {
         let payload = "DROP TABLE __schema_migrations";
         self.conn.query_drop(payload)?;
+        Ok(())
+    }
+
+    fn drop_database(&mut self, db_name: &str) -> Result<(), Error> {
+        let payload = formatdoc!("
+            DROP DATABASE IF EXISTS `{db_name}`;
+            CREATE DATABASE `{db_name}`;
+        ", db_name = db_name);
+        self.conn.exec_drop(payload, ())?;
         Ok(())
     }
 

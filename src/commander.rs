@@ -5,6 +5,7 @@ use std::path::Path;
 
 use log::{trace, debug};
 use indoc::formatdoc;
+use url::Url;
 
 use crate::lookup::{self, MigrationFiles, VecStr};
 use crate::sequel::{Driver as SequelDriver, VecSerial};
@@ -215,8 +216,12 @@ impl<T: SequelDriver + 'static + ?Sized> Migrator<T> {
         Ok(())
     }
 
-    pub fn drop(&self) -> Result<(), super::GenericError> {
-        println!("Currently this is a placeholder command, usually you only need to run `DROP DATABASE <dbname>`.");
+    pub fn drop(&mut self, raw_db_url: &str) -> Result<(), super::GenericError> {
+        let db_url = Url::parse(raw_db_url).ok();
+        if let Some(db_url) = db_url {
+            let db_name = db_url.path().trim_start_matches('/');
+            let _ = self.executor.drop_database(db_name)?;
+        }
         Ok(())
     }
 }

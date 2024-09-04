@@ -12,6 +12,7 @@ pub trait Driver {
     fn ensure_migration_table_exists(&mut self) -> Result<(), Error>;
     #[allow(dead_code)]
     fn drop_migration_table(&mut self) -> Result<(), Error>;
+    fn drop_database(&mut self, db_name: &str) -> Result<(), Error>;
     fn count_migrations(&mut self) -> Result<i64, Error>;
     fn get_completed_migrations(&mut self) -> Result<VecSerial, Error>;
     fn get_last_completed_migration(&mut self) -> Result<i64, Error>;

@@ -55,7 +55,7 @@ Here are the available subcommands:
 ```shell
 create    Creates a timestamped migration file
 down      Remove all applied migrations
-drop      Drops everything inside the database
+drop      Drops everything inside the database (NOTE: must have create/drop privilege)
 redo      Redo the last migration
 revert    Reverts the last migration
 init      Setups and creates initial file directory and env

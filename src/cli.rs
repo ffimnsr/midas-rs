@@ -94,7 +94,7 @@ pub(crate) fn midas_entry(
         )
         .subcommand(
             Command::new("drop")
-                .about("Drops everything inside the database"),
+                .about("Drops everything inside the database (NOTE: must have create/drop privilege)"),
         );
 
     let matches = if sub_command {
@@ -153,7 +153,7 @@ pub(crate) fn midas_entry(
         Some("redo") => migrator.redo()?,
         Some("revert") => migrator.revert()?,
         Some("init") => migrator.init(source_path, source, raw_db_url)?,
-        Some("drop") => migrator.drop()?,
+        Some("drop") => migrator.drop(raw_db_url)?,
         None => println!("No subcommand provided"),
         _ => println!("Invalid subcommand provided"),
     }
