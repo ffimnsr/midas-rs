@@ -24,7 +24,7 @@ path = "src/midas.rs"
 clap = { version = "4.5", features = ["string"] }
 postgres = "0.19"
 mysql = "25.0"
-rusqlite = "0.32"
+rusqlite = { version = "0.32", features = ["bundled"] }
 regex = "1.10"
 dotenv = "0.15"
 tracing = "0.1"
