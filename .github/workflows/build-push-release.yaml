@@ -2,7 +2,7 @@ name: build-push-release
 on:
   push:
     tags:
-      - 'release-*.*.*'
+      - '[0-9]+.[0-9]+.[0-9]+'
 
 env:
   CARGO_TERM_COLOR: always
@@ -27,15 +27,25 @@ jobs:
       midas_version: ${{ env.MIDAS_VERSION }}
     steps:
       - uses: actions/checkout@v4
-      - name: Extract package version
+      - name: Extract package version from the tag
         shell: bash
         if: env.MIDAS_VERSION == ''
         run: |
-          echo "MIDAS_VERSION=${GITHUB_REF_NAME#release-}" >> $GITHUB_ENV
+          echo "MIDAS_VERSION=${{ github.ref_name }}" >> $GITHUB_ENV
+      - name: Show the version
+        run: |
+          echo "version is: $MIDAS_VERSION"
+      - name: Check that tag version and Cargo.toml version are the same
+        shell: bash
+        run: |
+          if ! grep -q "version = \"$VERSION\"" Cargo.toml; then
+            echo "version does not match Cargo.toml" >&2
+            exit 1
+          fi
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create ${{ env.MIDAS_VERSION }}
+        run: gh release create ${{ env.MIDAS_VERSION }} --verify-tag --title $VERSION
   build-release-package:
     runs-on: ${{ matrix.os }}
     needs:
@@ -81,6 +91,10 @@ jobs:
           #   target: i686-pc-windows-msvc
     steps:
       - uses: actions/checkout@v4
+      - name: Install packages (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          ci/ubuntu-install-packages
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
         with:
@@ -145,6 +159,7 @@ jobs:
       - name: Upload release archive
         env:
           GH_TOKEN: ${{ github.token }}
+        shell: bash
         run: gh release upload ${{ needs.create-release.outputs.midas_version }} ${{ env.ASSET }} ${{ env.ASSET_SUM }}
   build-release-image:
     runs-on: ubuntu-latest
