@@ -9,7 +9,7 @@ categories = ["command-line-utilities", "development-tools"]
 homepage = "https://github.com/ffimnsr/midas"
 repository = "https://github.com/ffimnsr/midas"
 license = "MIT OR Apache-2.0"
-keywords = ["migrations", "database", "postgres", "mysql", "sqlite", "sqlserver", "migrate", "cli"]
+keywords = ["sql", "database", "command-line", "migrate", "cli"]
 exclude = [".gitignore"]
 
 [[bin]]
