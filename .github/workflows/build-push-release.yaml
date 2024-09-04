@@ -45,7 +45,7 @@ jobs:
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create ${{ env.MIDAS_VERSION }} --verify-tag --title $VERSION
+        run: gh release create ${{ env.MIDAS_VERSION }} --verify-tag --title $MIDAS_VERSION
   build-release-package:
     runs-on: ${{ matrix.os }}
     needs:
