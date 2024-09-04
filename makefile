@@ -26,4 +26,10 @@ run-mssql:
 		-e MSSQL_DB=startup \
 		-d mcr.microsoft.com/mssql/server:2022-latest
 
+format:
+	cargo fmt --all
+
+clippy:
+	cargo clippy --all-features --all-targets --tests --benches -- -Dclippy::all
+
 .PHONY: run-pgsql run-mysql run-mariadb run-mssql

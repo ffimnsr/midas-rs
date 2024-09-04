@@ -1,6 +1,6 @@
 use indoc::formatdoc;
 use log::trace;
-use mysql::{prelude::Queryable, params, Pool, PooledConn};
+use mysql::{params, prelude::Queryable, Pool, PooledConn};
 
 use super::{Driver as SequelDriver, Error, VecSerial};
 
@@ -36,10 +36,13 @@ impl SequelDriver for Mysql {
     }
 
     fn drop_database(&mut self, db_name: &str) -> Result<(), Error> {
-        let payload = formatdoc!("
+        let payload = formatdoc!(
+            "
             DROP DATABASE IF EXISTS `{db_name}`;
             CREATE DATABASE `{db_name}`;
-        ", db_name = db_name);
+        ",
+            db_name = db_name
+        );
         self.conn.exec_drop(payload, ())?;
         Ok(())
     }
@@ -54,7 +57,8 @@ impl SequelDriver for Mysql {
 
     fn get_completed_migrations(&mut self) -> Result<VecSerial, Error> {
         trace!("Retrieving all completed migrations");
-        let payload = "SELECT migration FROM __schema_migrations ORDER BY id ASC";
+        let payload =
+            "SELECT migration FROM __schema_migrations ORDER BY id ASC";
         let result: VecSerial = self.conn.query(payload)?;
         Ok(result)
     }
@@ -74,7 +78,10 @@ impl SequelDriver for Mysql {
         trace!("Adding migration to migrations table");
         let payload =
             "INSERT INTO __schema_migrations (migration) VALUES (:migration_number)";
-        self.conn.exec_drop(payload, params! { "migration_number" => migration_number })?;
+        self.conn.exec_drop(
+            payload,
+            params! { "migration_number" => migration_number },
+        )?;
         Ok(())
     }
 
@@ -85,7 +92,10 @@ impl SequelDriver for Mysql {
         trace!("Removing a migration in the migrations table");
         let payload =
             "DELETE FROM __schema_migrations WHERE migration = :migration_number";
-        self.conn.exec_drop(payload, params! { "migration_number" => migration_number })?;
+        self.conn.exec_drop(
+            payload,
+            params! { "migration_number" => migration_number },
+        )?;
         Ok(())
     }
 

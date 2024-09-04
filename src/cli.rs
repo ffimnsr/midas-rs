@@ -1,19 +1,19 @@
+use clap::{Arg, Command};
 use log::debug;
 #[allow(unused_imports)]
 use std::env;
 use std::path::Path;
 use std::time::Instant;
 use url::Url;
-use clap::{Command, Arg};
 
 const PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 const PKG_DESCRIPTION: &str = env!("CARGO_PKG_DESCRIPTION");
 
-use super::sequel::Driver as SequelDriver;
+use super::commander::Migrator;
 use super::sequel::mysql::Mysql;
 use super::sequel::postgres::Postgres;
 use super::sequel::sqlite::Sqlite;
-use super::commander::Migrator;
+use super::sequel::Driver as SequelDriver;
 
 pub(crate) type GenericError = Box<dyn std::error::Error + Send + Sync>;
 
@@ -114,15 +114,17 @@ pub(crate) fn midas_entry(
     };
 
     let raw_env_db_url = env::var("DSN").ok();
-    let raw_db_url = matches.get_one::<String>("database")
-        .or_else(|| raw_env_db_url.as_ref())
+    let raw_db_url = matches
+        .get_one::<String>("database")
+        .or(raw_env_db_url.as_ref())
         .expect("msg: No database connection url was provided");
 
     debug!("Using DSN: {}", raw_db_url);
 
     let env_source_path = env::var("MIGRATIONS_ROOT").ok();
-    let source = matches.get_one::<String>("source")
-        .or_else(|| env_source_path.as_ref())
+    let source = matches
+        .get_one::<String>("source")
+        .or(env_source_path.as_ref())
         .expect("msg: No migration source path was provided");
 
     let source_path = Path::new(&source);
@@ -132,9 +134,7 @@ pub(crate) fn midas_entry(
 
     let executor = get_executor(raw_db_url);
     if executor.is_none() {
-        return Err(
-            "Unable to initialize executor".into()
-        );
+        return Err("Unable to initialize executor".into());
     }
     let mut migrator = Migrator::new(executor.unwrap(), migrations);
     match matches.subcommand_name() {
@@ -177,14 +177,24 @@ fn get_executor(raw_db_url: &str) -> Option<Box<dyn SequelDriver>> {
         debug!("Connecting to database scheme: {}", db_url.scheme());
 
         let driver: Box<dyn SequelDriver> = match db_url.scheme() {
-            "file" => Box::new(Sqlite::new(raw_db_url).expect("Failed to create Sqlite driver")),
-            "mysql" => Box::new(Mysql::new(raw_db_url).expect("Failed to create Mysql driver")),
-            "postgres" => Box::new(Postgres::new(raw_db_url).expect("Failed to create Postgres driver")),
+            "file" => Box::new(
+                Sqlite::new(raw_db_url)
+                    .expect("Failed to create Sqlite driver"),
+            ),
+            "mysql" => Box::new(
+                Mysql::new(raw_db_url).expect("Failed to create Mysql driver"),
+            ),
+            "postgres" => Box::new(
+                Postgres::new(raw_db_url)
+                    .expect("Failed to create Postgres driver"),
+            ),
             _ => return None,
         };
 
         Some(driver)
     } else {
-        Some(Box::new(Sqlite::new(raw_db_url).expect("Failed to create Sqlite driver")))
+        Some(Box::new(
+            Sqlite::new(raw_db_url).expect("Failed to create Sqlite driver"),
+        ))
     }
 }

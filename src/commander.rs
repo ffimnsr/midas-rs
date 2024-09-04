@@ -3,8 +3,8 @@ use std::io::Write;
 use std::iter::Iterator;
 use std::path::Path;
 
-use log::{trace, debug};
 use indoc::formatdoc;
+use log::{debug, trace};
 use url::Url;
 
 use crate::lookup::{self, MigrationFiles, VecStr};
@@ -198,16 +198,25 @@ impl<T: SequelDriver + 'static + ?Sized> Migrator<T> {
         Ok(())
     }
 
-    pub fn init(&self, source_path: &Path, source: &str, dsn: &str) -> Result<(), super::GenericError> {
+    pub fn init(
+        &self,
+        source_path: &Path,
+        source: &str,
+        dsn: &str,
+    ) -> Result<(), super::GenericError> {
         let filename = ".env.midas";
         let filepath = std::env::current_dir()?.join(filename);
 
         debug!("Creating new env file: {:?}", filepath);
         let mut f = File::create(filepath)?;
-        let contents = formatdoc!("
+        let contents = formatdoc!(
+            "
             DSN={}
             MIGRATIONS_ROOT={}
-        ", dsn, source);
+        ",
+            dsn,
+            source
+        );
         f.write_all(contents.as_bytes())?;
         f.sync_all()?;
 
@@ -216,11 +225,14 @@ impl<T: SequelDriver + 'static + ?Sized> Migrator<T> {
         Ok(())
     }
 
-    pub fn drop(&mut self, raw_db_url: &str) -> Result<(), super::GenericError> {
+    pub fn drop(
+        &mut self,
+        raw_db_url: &str,
+    ) -> Result<(), super::GenericError> {
         let db_url = Url::parse(raw_db_url).ok();
         if let Some(db_url) = db_url {
             let db_name = db_url.path().trim_start_matches('/');
-            let _ = self.executor.drop_database(db_name)?;
+            self.executor.drop_database(db_name)?;
         }
         Ok(())
     }

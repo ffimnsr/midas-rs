@@ -1,12 +1,12 @@
+use indoc::indoc;
+use log::debug;
+use regex::Regex;
 use std::collections::BTreeMap;
 use std::fs::{read_dir, File};
 use std::io::prelude::*;
 use std::io::BufReader;
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
-use indoc::indoc;
-use log::debug;
-use regex::Regex;
 
 pub type VecStr = Vec<String>;
 
@@ -93,7 +93,10 @@ pub fn build_migration_list(
             ..info
         };
 
-        debug!("Running the migration: {:?} {:?}", migration, migration.filename);
+        debug!(
+            "Running the migration: {:?} {:?}",
+            migration, migration.filename
+        );
         files.insert(migration.number, migration);
     }
 

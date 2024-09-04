@@ -76,12 +76,16 @@ jobs:
             rust: stable
           # - build: win-msvc
           #   os: windows-2022
-          #   rust: stable
+          #   rust: nightly
           # - build: win-gnu
           #   os: windows-2022
-          #   rust: stable-x86_64-gnu
+          #   rust: nightly-x86_64-gnu
     steps:
       - uses: actions/checkout@v4
+      - name: Install packages (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          ci/ubuntu-install-packages
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
         with:
@@ -133,9 +137,3 @@ jobs:
           toolchain: stable
           components: clippy, rustc-dev
       - run: cargo clippy --all-features --all-targets --tests --benches -- -Dclippy::all
-  # outdated:
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - uses: dtolnay/install@cargo-outdated
-  #     - run: cargo outdated --exit-code 1

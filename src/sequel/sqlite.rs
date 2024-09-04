@@ -48,7 +48,8 @@ impl SequelDriver for Sqlite {
 
     fn get_completed_migrations(&mut self) -> Result<VecSerial, Error> {
         trace!("Retrieving all completed migrations");
-        let payload = "SELECT migration FROM __schema_migrations ORDER BY id ASC";
+        let payload =
+            "SELECT migration FROM __schema_migrations ORDER BY id ASC";
         let mut stmt = self.conn.prepare(payload)?;
         let it = stmt.query_map((), |row| row.get(0))?;
         let result = it.map(|r| r.unwrap()).collect::<VecSerial>();
@@ -70,7 +71,7 @@ impl SequelDriver for Sqlite {
         trace!("Adding migration to migrations table");
         let payload =
             "INSERT INTO __schema_migrations (migration) VALUES ($1)";
-        self.conn.execute(payload, &[&migration_number])?;
+        self.conn.execute(payload, [&migration_number])?;
         Ok(())
     }
 
@@ -79,9 +80,8 @@ impl SequelDriver for Sqlite {
         migration_number: i64,
     ) -> Result<(), Error> {
         trace!("Removing a migration in the migrations table");
-        let payload =
-            "DELETE FROM __schema_migrations WHERE migration = $1";
-        self.conn.execute(payload, &[&migration_number])?;
+        let payload = "DELETE FROM __schema_migrations WHERE migration = $1";
+        self.conn.execute(payload, [&migration_number])?;
         Ok(())
     }
 

@@ -1,6 +1,6 @@
+pub use ::mysql::Error as MysqlError;
 pub use ::postgres::Error as PostgresError;
 pub use ::rusqlite::Error as SqliteError;
-pub use ::mysql::Error as MysqlError;
 
 use std::error;
 use std::fmt;
@@ -73,7 +73,10 @@ impl Error {
         self.0.cause
     }
 
-    fn new(kind: Kind, cause: Option<Box<dyn error::Error + Sync + Send>>) -> Error {
+    fn new(
+        kind: Kind,
+        cause: Option<Box<dyn error::Error + Sync + Send>>,
+    ) -> Error {
         Error(Box::new(ErrorInner { kind, cause }))
     }
 }
