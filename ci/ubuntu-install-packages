@@ -7,4 +7,4 @@ if ! command -V sudo; then
 fi
 sudo apt-get update
 sudo apt-get install -y --no-install-recommends \
-  zsh xz-utils liblz4-tool musl-tools brotli zstd pkg-config libssl-dev
+  zsh xz-utils liblz4-tool musl-tools brotli zstd perl gcc libssl-dev
