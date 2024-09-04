@@ -8,10 +8,11 @@ pub struct Mysql {
 }
 
 impl Mysql {
-    pub fn new(database_url: &str) -> Result<Self, mysql::Error> {
+    pub fn new(database_url: &str) -> Result<Self, Error> {
         let pool = Pool::new(database_url)?;
         let conn = pool.get_conn()?;
-        let db = Mysql { conn };
+        let mut db = Mysql { conn };
+        db.ensure_migration_schema_exists()?;
         Ok(db)
     }
 }
@@ -36,25 +37,23 @@ impl SequelDriver for Mysql {
     fn count_migrations(&mut self) -> Result<i64, Error> {
         trace!("Retrieving migrations count");
         let payload = "SELECT COUNT(*) as count FROM __schema_migrations";
-        let row = self.conn.query_first(payload)?;
-        let result = row.get::<_, i64>(0);
-        let result = row.unwrap().get("count").unwrap();
+        let row: Option<i64> = self.conn.query_first(payload)?;
+        let result = row.unwrap();
         Ok(result)
     }
 
     fn get_completed_migrations(&mut self) -> Result<VecSerial, Error> {
         trace!("Retrieving all completed migrations");
         let payload = "SELECT migration FROM __schema_migrations ORDER BY id ASC";
-        let mut stmt = self.conn.query(payload)?;
-        let result = it.map(|r| r.unwrap()).collect::<VecSerial>();
+        let result: VecSerial = self.conn.query(payload)?;
         Ok(result)
     }
 
     fn get_last_completed_migration(&mut self) -> Result<i64, Error> {
         trace!("Checking and retrieving the last migration stored on migrations table");
         let payload = "SELECT migration FROM __schema_migrations ORDER BY id DESC LIMIT 1";
-        let mut stmt = self.conn.prep(payload)?;
-        let result = stmt.query_row([], |row| row.get(0))?;
+        let row: Option<i64> = self.conn.query_first(payload)?;
+        let result = row.unwrap();
         Ok(result)
     }
 

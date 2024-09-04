@@ -3,19 +3,20 @@ use rusqlite::{Connection, Result};
 
 use super::{Driver as SequelDriver, Error, VecSerial};
 
-pub struct SQLite {
+pub struct Sqlite {
     conn: Connection,
 }
 
-impl SQLite {
-    pub fn new(file_url: &str) -> Result<Self, rusqlite::Error> {
+impl Sqlite {
+    pub fn new(file_url: &str) -> Result<Self, Error> {
         let conn = Connection::open(file_url)?;
-        let db = SQLite { conn };
+        let mut db = Sqlite { conn };
+        db.ensure_migration_table_exists()?;
         Ok(db)
     }
 }
 
-impl SequelDriver for SQLite {
+impl SequelDriver for Sqlite {
     fn ensure_migration_schema_exists(&mut self) -> Result<(), Error> {
         Ok(())
     }

@@ -33,6 +33,7 @@ tracing-attributes = "0.1"
 tracing-futures = "0.2"
 log = "0.4"
 url = "2.5"
+indoc = "2"
 
 [dev-dependencies]
 tempfile = "3.12"

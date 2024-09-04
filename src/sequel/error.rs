@@ -68,6 +68,7 @@ impl From<MysqlError> for Error {
 
 impl Error {
     /// Consumes the error, returning its cause.
+    #[allow(dead_code)]
     pub fn into_source(self) -> Option<Box<dyn error::Error + Sync + Send>> {
         self.0.cause
     }

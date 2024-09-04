@@ -3,15 +3,17 @@ use log::debug;
 use std::env;
 use std::path::Path;
 use std::time::Instant;
-
+use url::Url;
 use clap::{Command, Arg};
 
 const PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 const PKG_DESCRIPTION: &str = env!("CARGO_PKG_DESCRIPTION");
 
-use super::commander::Migrator;
+use super::sequel::Driver as SequelDriver;
+use super::sequel::mysql::Mysql;
 use super::sequel::postgres::Postgres;
-// use super::sequel::mysql::MySQL;
+use super::sequel::sqlite::Sqlite;
+use super::commander::Migrator;
 
 pub(crate) type GenericError = Box<dyn std::error::Error + Send + Sync>;
 
@@ -19,7 +21,7 @@ pub(crate) fn midas_entry(
     command_name: &str,
     sub_command: bool,
 ) -> Result<(), GenericError> {
-    dotenv::dotenv().ok();
+    dotenv::dotenv().or_else(|_| dotenv::from_filename(".env.midas")).ok();
 
     if env::var("RUST_LOG").is_err() {
         env::set_var("RUST_LOG", "midas=info");
@@ -111,27 +113,30 @@ pub(crate) fn midas_entry(
         cli_app.get_matches()
     };
 
-    let env_db_url = env::var("DSN").unwrap_or(
-        "postgres://postgres@localhost:5432/postgres?sslmode=disable".into(),
-    );
+    let raw_env_db_url = env::var("DSN").ok();
+    let raw_db_url = matches.get_one::<String>("database")
+        .or_else(|| raw_env_db_url.as_ref())
+        .expect("msg: No database connection url was provided");
 
-    let database_url = matches.get_one::<String>("database")
-        .unwrap_or(&env_db_url);
+    debug!("Using DSN: {}", raw_db_url);
 
-    let env_source_path =
-        env::var("MIGRATIONS_ROOT").unwrap_or("migrations".into());
+    let env_source_path = env::var("MIGRATIONS_ROOT").ok();
+    let source = matches.get_one::<String>("source")
+        .or_else(|| env_source_path.as_ref())
+        .expect("msg: No migration source path was provided");
 
-    debug!("Using DSN: {}", database_url);
-
-    let source = matches.get_one::<String>("source").unwrap_or(&env_source_path);
     let source_path = Path::new(&source);
     let migrations = super::lookup::build_migration_list(source_path)?;
 
     let start = Instant::now();
 
-    let executor = Postgres::new(database_url)?;
-    let mut migrator = Migrator::new(Box::new(executor), migrations);
-
+    let executor = get_executor(raw_db_url);
+    if executor.is_none() {
+        return Err(
+            "Unable to initialize executor".into()
+        );
+    }
+    let mut migrator = Migrator::new(executor.unwrap(), migrations);
     match matches.subcommand_name() {
         Some("create") => {
             let slug = matches
@@ -147,7 +152,7 @@ pub(crate) fn midas_entry(
         Some("down") => migrator.down()?,
         Some("redo") => migrator.redo()?,
         Some("revert") => migrator.revert()?,
-        Some("init") => migrator.init()?,
+        Some("init") => migrator.init(source_path, source, raw_db_url)?,
         Some("drop") => migrator.drop()?,
         None => println!("No subcommand provided"),
         _ => println!("Invalid subcommand provided"),
@@ -164,4 +169,22 @@ pub(crate) fn midas_entry(
     }
 
     Ok(())
+}
+
+fn get_executor(raw_db_url: &str) -> Option<Box<dyn SequelDriver>> {
+    let db_url = Url::parse(raw_db_url).ok();
+    if let Some(db_url) = db_url {
+        debug!("Connecting to database scheme: {}", db_url.scheme());
+
+        let driver: Box<dyn SequelDriver> = match db_url.scheme() {
+            "file" => Box::new(Sqlite::new(raw_db_url).expect("Failed to create Sqlite driver")),
+            "mysql" => Box::new(Mysql::new(raw_db_url).expect("Failed to create Mysql driver")),
+            "postgres" => Box::new(Postgres::new(raw_db_url).expect("Failed to create Postgres driver")),
+            _ => return None,
+        };
+
+        Some(driver)
+    } else {
+        Some(Box::new(Sqlite::new(raw_db_url).expect("Failed to create Sqlite driver")))
+    }
 }

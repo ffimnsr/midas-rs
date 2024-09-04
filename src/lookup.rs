@@ -4,7 +4,7 @@ use std::io::prelude::*;
 use std::io::BufReader;
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
-
+use indoc::indoc;
 use log::debug;
 use regex::Regex;
 
@@ -115,10 +115,12 @@ pub fn create_migration_file(
 
     debug!("Creating new migration file: {:?}", filepath);
     let mut f = File::create(filepath)?;
-    let contents = "\
-    -- # Put the your SQL below migration seperator.\n\
-    -- !UP\n\n\
-    -- !DOWN\n";
+    let contents = indoc! {"\
+        -- # Put the your SQL below migration seperator.
+        -- !UP
+
+        -- !DOWN
+    "};
 
     f.write_all(contents.as_bytes())?;
     f.sync_all()?;

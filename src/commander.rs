@@ -3,7 +3,8 @@ use std::io::Write;
 use std::iter::Iterator;
 use std::path::Path;
 
-use log::trace;
+use log::{trace, debug};
+use indoc::formatdoc;
 
 use crate::lookup::{self, MigrationFiles, VecStr};
 use crate::sequel::{Driver as SequelDriver, VecSerial};
@@ -19,12 +20,12 @@ macro_rules! get_content_string {
     };
 }
 
-pub struct Migrator<T> {
+pub struct Migrator<T: ?Sized> {
     executor: Box<T>,
     migrations: MigrationFiles,
 }
 
-impl<T: SequelDriver + 'static> Migrator<T> {
+impl<T: SequelDriver + 'static + ?Sized> Migrator<T> {
     pub fn new(executor: Box<T>, migrations: MigrationFiles) -> Self {
         Self { executor, migrations }
     }
@@ -36,7 +37,6 @@ impl<T: SequelDriver + 'static> Migrator<T> {
     ) -> Result<(), super::GenericError> {
         let fixed_slug = slug.to_ascii_lowercase().replace(' ', "_");
         lookup::create_migration_file(path, &fixed_slug)?;
-
         Ok(())
     }
 
@@ -187,7 +187,6 @@ impl<T: SequelDriver + 'static> Migrator<T> {
         let content_down = get_content_string!(content_down);
 
         self.executor.migrate(&content_down)?;
-
         if std::env::var("MIGRATIONS_SKIP_LAST").is_ok() {
             if migrations_count > 1 {
                 self.executor.delete_last_completed_migration()?;
@@ -198,21 +197,21 @@ impl<T: SequelDriver + 'static> Migrator<T> {
         Ok(())
     }
 
-    pub fn init(&self) -> Result<(), super::GenericError> {
+    pub fn init(&self, source_path: &Path, source: &str, dsn: &str) -> Result<(), super::GenericError> {
         let filename = ".env.midas";
         let filepath = std::env::current_dir()?.join(filename);
 
-        log::debug!("Creating new env file: {:?}", filepath);
-
+        debug!("Creating new env file: {:?}", filepath);
         let mut f = File::create(filepath)?;
-        let contents = "\
-            DSN=postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable\n\
-            MIGRATIONS_ROOT=./data/migrations\n";
+        let contents = formatdoc!("
+            DSN={}
+            MIGRATIONS_ROOT={}
+        ", dsn, source);
         f.write_all(contents.as_bytes())?;
         f.sync_all()?;
 
-        fs::create_dir_all("./data/migrations")?;
-
+        debug!("Creating new migrations directory: {:?}", source_path);
+        fs::create_dir_all(source_path)?;
         Ok(())
     }
 
