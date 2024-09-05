@@ -112,6 +112,7 @@ jobs:
           toolchain: ${{ matrix.rust }}
           target: ${{ matrix.target }}
       - name: Use cross compiler
+        if: matrix.os == 'ubuntu-latest'
         shell: bash
         run: |
           cargo install cross
@@ -210,12 +211,8 @@ jobs:
           echo "target dir is: ${{ env.TARGET_DIR }}"
       - name: Build release binary
         run: ${{ env.CARGO }} build --verbose --release --target ${{ env.TARGET }} ${{ env.TARGET_FLAGS }}
-      - name: Strip release binary
-        run: |
-          strip "target/${{ env.TARGET }}/release/midas"
-          strip "target/${{ env.TARGET }}/release/cargo-migrate"
       - name: Build deb package
-        run: ${{ env.CARGO }} deb --release --target ${{ env.TARGET }}
+        run: ${{ env.CARGO }} deb --target ${{ env.TARGET }}
       - name: Build archive
         shell: bash
         run: |
