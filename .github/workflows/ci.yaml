@@ -7,7 +7,7 @@ on:
     branches:
       - master
   schedule:
-    - cron: '0 1 * * *'
+    - cron: '00 01 * * *'
 
 permissions:
   contents: read
@@ -74,12 +74,18 @@ jobs:
           - build: macos
             os: macos-latest
             rust: stable
-          # - build: win-msvc
-          #   os: windows-2022
-          #   rust: nightly
-          # - build: win-gnu
-          #   os: windows-2022
-          #   rust: nightly-x86_64-gnu
+          - build: win-msvc
+            os: windows-latest
+            rust: nightly
+            target: x86_64-pc-windows-msvc
+          - build: win-gnu
+            os: windows-latest
+            rust: nightly-x86_64-gnu
+            target: x86_64-pc-windows-gnu
+          - build: win32-msvc
+            os: windows-latest
+            rust: nightly
+            target: i686-pc-windows-msvc
     steps:
       - uses: actions/checkout@v4
       - name: Install packages (Ubuntu)
