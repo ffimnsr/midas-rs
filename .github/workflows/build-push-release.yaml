@@ -58,6 +58,7 @@ jobs:
       TARGET_FLAGS: ""
       TARGET_DIR: ./target
       RUST_BACKTRACE: 1
+      CROSS_VERSION: v0.2.5
     strategy:
       matrix:
         build:
@@ -78,7 +79,7 @@ jobs:
             target: arm-unknown-linux-gnueabihf
           - build: macos
             os: macos-latest
-            rust: stable
+            rust: nightly
             target: x86_64-apple-darwin
           - build: win-msvc
             os: windows-latest
@@ -112,11 +113,19 @@ jobs:
           toolchain: ${{ matrix.rust }}
           target: ${{ matrix.target }}
       - name: Use cross compiler
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.os == 'ubuntu-latest' && matrix.target != ''
         shell: bash
         run: |
-          cargo install cross
+          dir="$RUNNER_TEMP/cross-download"
+          mkdir "$dir"
+          echo "$dir" >> $GITHUB_PATH
+          cd "$dir"
+          curl -LO "https://github.com/cross-rs/cross/releases/download/$CROSS_VERSION/cross-x86_64-unknown-linux-musl.tar.gz"
+          tar xf cross-x86_64-unknown-linux-musl.tar.gz
           echo "CARGO=cross" >> $GITHUB_ENV
+      - name: Set target variables
+        shell: bash
+        run: |
           echo "TARGET_FLAGS=--target ${{ matrix.target }}" >> $GITHUB_ENV
           echo "TARGET_DIR=./target/${{ matrix.target }}" >> $GITHUB_ENV
       - name: Show command used for Cargo
@@ -217,7 +226,7 @@ jobs:
         shell: bash
         run: |
           deb_target="midas_${{ needs.create-release.outputs.midas_version }}-1_amd64.deb"
-          mv "target/debian/$deb_target" .
+          mv "target/${{ env.TARGET }}/debian/$deb_target" .
           shasum -a 256 "$deb_target" > "$deb_target.sha256"
           echo "ASSET=$deb_target" >> $GITHUB_ENV
           echo "ASSET_SUM=$deb_target.sha256" >> $GITHUB_ENV
