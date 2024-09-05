@@ -64,9 +64,9 @@ jobs:
           - linux
           - linux-arm
           - macos
-          # - win-msvc
-          # - win-gnu
-          # - win32-msvc
+          - win-msvc
+          - win-gnu
+          - win32-msvc
         include:
           - build: linux
             os: ubuntu-latest
@@ -80,18 +80,18 @@ jobs:
             os: macos-latest
             rust: stable
             target: x86_64-apple-darwin
-          # - build: win-msvc
-          #   os: windows-latest
-          #   rust: stable
-          #   target: x86_64-pc-windows-msvc
-          # - build: win-gnu
-          #   os: windows-latest
-          #   rust: stable-x86_64-gnu
-          #   target: x86_64-pc-windows-gnu
-          # - build: win32-msvc
-          #   os: windows-latest
-          #   rust: stable
-          #   target: i686-pc-windows-msvc
+          - build: win-msvc
+            os: windows-latest
+            rust: nightly
+            target: x86_64-pc-windows-msvc
+          - build: win-gnu
+            os: windows-latest
+            rust: nightly-x86_64-gnu
+            target: x86_64-pc-windows-gnu
+          - build: win32-msvc
+            os: windows-latest
+            rust: nightly
+            target: i686-pc-windows-msvc
     steps:
       - uses: actions/checkout@v4
       - name: Install packages (Ubuntu)

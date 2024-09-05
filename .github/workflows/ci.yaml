@@ -82,16 +82,16 @@ jobs:
             os: windows-latest
             rust: nightly-x86_64-gnu
             target: x86_64-pc-windows-gnu
-          - build: win32-msvc
-            os: windows-latest
-            rust: nightly
-            target: i686-pc-windows-msvc
     steps:
       - uses: actions/checkout@v4
       - name: Install packages (Ubuntu)
         if: matrix.os == 'ubuntu-latest'
         run: |
           ci/ubuntu-install-packages
+      - name: Install packages (Windows GNU)
+        if: matrix.os == 'windows-latest' && matrix.target == 'x86_64-pc-windows-gnu'
+        run: |
+          pacman -S perl
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
         with:
