@@ -275,7 +275,7 @@ jobs:
   build-release-image:
     runs-on: ubuntu-latest
     needs:
-      - create-release
+      - build-release-package
     env:
       REGISTRY: ghcr.io
       IMAGE_NAME: ${{ github.repository }}
