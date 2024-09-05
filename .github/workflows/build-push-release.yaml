@@ -62,8 +62,15 @@ jobs:
     strategy:
       matrix:
         build:
-          - linux
-          - linux-arm
+          - stable-musl
+          - stable-x86-gnu
+          - stable-arm-gnueabihf
+          - stable-armv7-gnueabihf
+          - stable-armv7-musleabihf
+          - stable-armv7-musleabi
+          - stable-aarch64
+          - stable-powerpc64
+          - stable-s390x
           - macos
           - win-msvc
           - win-gnu
@@ -275,7 +282,7 @@ jobs:
   build-release-image:
     runs-on: ubuntu-latest
     needs:
-      - build-release-package
+      - create-release
     env:
       REGISTRY: ghcr.io
       IMAGE_NAME: ${{ github.repository }}
