@@ -61,6 +61,8 @@ revert    Reverts the last migration
 init      Setups and creates initial file directory and env
 status    Checks the status of the migration
 up        Apply all non-applied migrations
+faker     Generate fake data for the database (WIP)
+setup     Setup the database (WIP)
 ```
 
 For more info see `--help`.
@@ -80,9 +82,8 @@ Binary for different OS distribution can be downloaded [here](https://github.com
 ## What's in the Roadmap
 
 - [ ] TOML DSL for creating database objects
-- [-] Setup multiple drivers (e.g. MySQL, Sqlite3, etc.)
-- [ ] Add functionality for `setup` and `drop` commands.
-- [ ] More to come.
+- [ ] Setup multiple drivers (e.g. MySQL, Sqlite3, etc.)
+- [ ] Add functionality for `setup` and `faker` commands.
 
 ## License
 
