@@ -89,9 +89,12 @@ jobs:
         run: |
           ci/ubuntu-install-packages
       - name: Install packages (Windows GNU)
+        uses: msys2/setup-msys2@v2
         if: matrix.os == 'windows-latest' && matrix.target == 'x86_64-pc-windows-gnu'
-        run: |
-          pacman -S perl
+        with:
+          msystem: UCRT64
+          update: true
+          install: perl mingw-w64-ucrt-x86_64-gcc openssl
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
         with:
@@ -114,13 +117,25 @@ jobs:
           echo "cargo command is: ${{ env.CARGO }}"
           echo "target flag is: ${{ env.TARGET_FLAGS }}"
           echo "target dir is: ${{ env.TARGET_DIR }}"
-      - name: Build binary and dependency crates
+      - name: Build binary and dependency crates (native)
+        if: matrix.target == ''
         run: ${{ env.CARGO }} build --verbose ${{ env.TARGET_FLAGS }}
-      - name: Run tests
-        if: matrix.target != ''
+      - name: Build binary and dependency crates (cross)
+        if: matrix.target != 'x86_64-pc-windows-gnu'
+        run: ${{ env.CARGO }} build --verbose ${{ env.TARGET_FLAGS }}
+      - name: Build binary and dependency crates (win-gnu)
+        if: matrix.target == 'x86_64-pc-windows-gnu'
+        shell: msys2 {0}
+        run: ${{ env.CARGO }} build --verbose ${{ env.TARGET_FLAGS }}
+      - name: Run tests (native)
+        if: matrix.target == ''
         run: ${{ env.CARGO }} test --verbose ${{ env.TARGET_FLAGS }}
-      - name: Run tests (with cross)
-        if: matrix.target != ''
+      - name: Run tests (cross)
+        if: matrix.target != 'x86_64-pc-windows-gnu'
+        run: ${{ env.CARGO }} test --verbose ${{ env.TARGET_FLAGS }}
+      - name: Run tests (win-gnu)
+        if: matrix.target == 'x86_64-pc-windows-gnu'
+        shell: msys2 {0}
         run: ${{ env.CARGO }} test --verbose ${{ env.TARGET_FLAGS }}
   rustfmt:
     runs-on: ubuntu-latest
