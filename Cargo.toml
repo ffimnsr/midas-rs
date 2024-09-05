@@ -1,6 +1,6 @@
 [package]
 name = "midas"
-version = "0.6.3"
+version = "0.6.4"
 authors = ["Edward Fitz Abucay gh:@ffimnsr"]
 edition = "2021"
 readme = "README.md"
@@ -38,3 +38,16 @@ openssl = { version = "0.10", features = ["vendored"] }
 
 [dev-dependencies]
 tempfile = "3.12"
+
+[package.metadata.deb]
+name = "midas"
+maintainer = "Edward Fitz Abucay gh:@ffimnsr"
+section = "utility"
+assets = [
+  ["target/release/midas", "usr/bin/", "755"],
+  ["target/release/cargo-migrate", "usr/bin/", "755"],
+  ["COPYRIGHT", "usr/share/doc/midas/", "644"],
+  ["LICENSE-MIT", "usr/share/doc/midas/", "644"],
+  ["LICENSE-APACHE", "usr/share/doc/midas/", "644"],
+  ["README.md", "usr/share/doc/midas/README", "644"],
+]
