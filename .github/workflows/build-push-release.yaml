@@ -81,7 +81,7 @@ jobs:
             rust: stable
             target: x86_64-unknown-linux-musl
             strip: x86_64-linux-musl-strip
-          - build: stable-x86
+          - build: stable-x86-gnu
             os: ubuntu-latest
             rust: stable
             target: i686-unknown-linux-gnu
