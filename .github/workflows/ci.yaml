@@ -93,8 +93,9 @@ jobs:
         if: matrix.os == 'windows-latest' && matrix.target == 'x86_64-pc-windows-gnu'
         with:
           msystem: UCRT64
-          update: true
-          install: perl mingw-w64-ucrt-x86_64-gcc openssl
+          update: false
+          install: git perl pkg-config mingw-w64-x86_64-toolchain mingw-w64-ucrt-x86_64-gcc openssl
+          path-type: inherit
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
         with:
