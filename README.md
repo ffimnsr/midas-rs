@@ -34,20 +34,19 @@ Do painless migrations.
 Here is a sample command line usage of `midas`.
 
 ```shell
+# PostgresSQL
 midas --database 'postgres://postgres:postgres@localhost:5432/startup' --source migrations up
 
-...or...
-
+# MySQL/MariaDB
 midas --database 'mysql://root:mysql@localhost:3306/startup' --source migrations up
 
-...or...
-
+# SQLite
 midas --database 'file:///./data.db' --source migrations up
 ```
 
-NOTE: For sqlite database use correct URI filenames stated here: https://www.sqlite.org/c3ref/open.html#urifilenameexamples
-
 or you could also use the `cargo migrate` to integrate it on your cargo workflow.
+
+> **NOTE:** For SQLite use correct URI filenames as stated here: https://www.sqlite.org/c3ref/open.html#urifilenameexamples
 
 The command will execute all **special** (up) SQL migrations files to the database. \
 Here are the available subcommands:

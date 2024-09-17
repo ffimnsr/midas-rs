@@ -121,10 +121,12 @@ pub(crate) fn midas_entry(
 
     debug!("Using DSN: {}", raw_db_url);
 
+    let default_source_path = Some("migrations".to_string());
     let env_source_path = env::var("MIGRATIONS_ROOT").ok();
     let source = matches
         .get_one::<String>("source")
         .or(env_source_path.as_ref())
+        .or(default_source_path.as_ref())
         .expect("msg: No migration source path was provided");
 
     let source_path = Path::new(&source);
