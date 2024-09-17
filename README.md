@@ -48,6 +48,20 @@ or you could also use the `cargo migrate` to integrate it on your cargo workflow
 
 > **NOTE:** For SQLite use correct URI filenames as stated here: https://www.sqlite.org/c3ref/open.html#urifilenameexamples
 
+### Using on container
+
+Here is a basic setup:
+
+```bash
+MIGRATION_DIR=$PWD/migrations
+mkdir -p $MIGRATION_DIR
+docker run --rm -v $MIGRATION_DIR:/app/migrations ghcr.io/ffimnsr/midas-rs:latest --database 'postgres://postgres:postgres@localhost:5432/startup' --source migrations status
+```
+
+You can omit the `--source migrations` as the source flag would default to migrations. In case you plan to change the mounted volume migrations path then append the `--source <path/to/migrations>` argument.
+
+### Command arguments
+
 The command will execute all **special** (up) SQL migrations files to the database. \
 Here are the available subcommands:
 
@@ -68,15 +82,45 @@ For more info see `--help`.
 
 ## Installation
 
-If you're into **Rust** then you can use `cargo` to install.
+The binary name for midas are `midas` and `cargo-migrate`.
 
-* The minimum supported version of Rust is `1.37.0`.
+Binary for different OS distribution can be downloaded [here](https://github.com/ffimnsr/midas/releases). Linux, macOS, and Windows are supported.
 
-```shellbash
+### From source
+
+If you're into **Rust**, then midas can be installed with `cargo`. The minimum supported version of Rust is `1.37.0`. The binaries produce may be bigger than expected as it contains debug symbols.
+
+```bash
 cargo install midas
 ```
 
-Binary for different OS distribution can be downloaded [here](https://github.com/ffimnsr/midas/releases).
+### For containers
+
+Docker / Podman installation:
+
+```bash
+# Docker
+docker pull ghcr.io/ffimnsr/midas-rs:latest
+
+# Podman
+podman pull ghcr.io/ffimnsr/midas-rs:latest
+```
+
+### For package managers
+
+If you're a Debian user (or a user of a Debian derivative like Ubuntu), then midas can be installed using a binary .deb file provided in each midas release.
+
+```bash
+curl -LO https://github.com/ffimnsr/midas-rs/releases/download/0.6.6/midas_0.6.6-1_amd64.deb
+sudo dpkg -i midas_0.6.6-1_amd64.deb
+```
+
+### Manual installation
+
+Follow the instruction below to install and use `midas` on your system.
+
+1. Download the binary for your OS distribution [here](https://github.com/ffimnsr/midas/releases).
+2. Copy it to your system binary directory (`/usr/local/bin`) or to your userspace binary directory (`$HOME/.local/bin`).
 
 ## What's in the Roadmap
 
