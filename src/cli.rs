@@ -120,7 +120,6 @@ pub(crate) fn midas_entry(
         .expect("msg: No database connection url was provided");
 
     debug!("Using DSN: {}", raw_db_url);
-
     let default_source_path = Some("migrations".to_string());
     let env_source_path = env::var("MIGRATIONS_ROOT").ok();
     let source = matches
