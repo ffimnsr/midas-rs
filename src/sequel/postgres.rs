@@ -38,13 +38,10 @@ impl SequelDriver for Postgres {
     }
 
     fn drop_database(&mut self, db_name: &str) -> Result<(), Error> {
-        let payload = formatdoc!(
-            "
+        let payload = formatdoc! {"
             DROP DATABASE IF EXISTS `{db_name}`;
             CREATE DATABASE `{db_name}`;
-        ",
-            db_name = db_name
-        );
+        ", db_name = db_name };
         self.client.execute(&payload, &[])?;
         Ok(())
     }

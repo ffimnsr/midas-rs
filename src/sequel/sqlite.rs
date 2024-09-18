@@ -1,3 +1,4 @@
+use indoc::indoc;
 use log::trace;
 use rusqlite::{Connection, Result};
 
@@ -22,7 +23,12 @@ impl SequelDriver for Sqlite {
     }
 
     fn ensure_migration_table_exists(&mut self) -> Result<(), Error> {
-        let payload = "CREATE TABLE IF NOT EXISTS __schema_migrations (id INTEGER PRIMARY KEY AUTOINCREMENT, migration BIGINT)";
+        let payload = indoc! {"
+            CREATE TABLE IF NOT EXISTS __schema_migrations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                migration BIGINT
+            );
+        "};
         self.conn.execute(payload, ())?;
         Ok(())
     }
