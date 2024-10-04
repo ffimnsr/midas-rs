@@ -113,7 +113,7 @@ pub(crate) fn midas_entry(
         cli_app.get_matches()
     };
 
-    let raw_env_db_url = env::var("DSN").ok();
+    let raw_env_db_url = env::var("DATABASE_URL").ok();
     let raw_db_url = matches
         .get_one::<String>("database")
         .or(raw_env_db_url.as_ref())

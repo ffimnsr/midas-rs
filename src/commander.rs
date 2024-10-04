@@ -210,7 +210,7 @@ impl<T: SequelDriver + 'static + ?Sized> Migrator<T> {
         debug!("Creating new env file: {:?}", filepath);
         let mut f = File::create(filepath)?;
         let contents = formatdoc! {"
-            DSN={}
+            DATABASE_URL={}
             MIGRATIONS_ROOT={}
         ", dsn, source};
         f.write_all(contents.as_bytes())?;
