@@ -1,0 +1,133 @@
+[tasks.install-git-hooks]
+command = "git"
+args = ["config", "--local", "core.hooksPath", ".githooks/"]
+
+[tasks.clip]
+command = "cargo"
+args = ["clippy", "--all-features", "--all-targets", "--tests", "--benches", "--", "-Dclippy::all"]
+
+[tasks.run-postgres]
+script = '''
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+packager=docker
+if ! command -v docker &>/dev/null; then
+  packager=podman
+fi
+
+$packager run -it --rm --name pgsql -p 5432:5432 \
+  -e POSTGRES_PASSWORD=postgres \
+  -e POSTGRES_DB=startup \
+  -d postgres:16-alpine
+'''
+
+[tasks.run-mysql]
+script = '''
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+packager=docker
+if ! command -v docker &>/dev/null; then
+  packager=podman
+fi
+
+$packager run -it --rm --name mysql -p 3306:3306 \
+		-e MYSQL_ROOT_PASSWORD=mysql \
+		-e MYSQL_DATABASE=startup \
+		-d mysql:9-oracle
+'''
+
+[tasks.run-mariadb]
+script = '''
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+packager=docker
+if ! command -v docker &>/dev/null; then
+  packager=podman
+fi
+
+$packager run -it --rm --name mariadb -p 3306:3306 \
+  -e MARIADB_ROOT_PASSWORD=mariadb \
+  -e MARIADB_DATABASE=startup \
+  -d mariadb:10
+'''
+
+[tasks.run-mssql]
+script = '''
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+packager=docker
+if ! command -v docker &>/dev/null; then
+  packager=podman
+fi
+
+$packager run -it --rm --name mssql -p 1433:1433 \
+  -e ACCEPT_EULA=Y \
+  -e MSSQL_SA_PASSWORD='Strong(!)Password123' \
+  -e MSSQL_PID=Developer \
+  -e MSSQL_DB=startup \
+  -d mcr.microsoft.com/mssql/server:2022-latest
+'''
+
+[tasks.create-package]
+script = '''
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+packager=docker
+if ! command -v docker &>/dev/null; then
+  packager=podman
+fi
+
+latest_version=${CARGO_MAKE_PROJECT_VERSION}
+name=${CARGO_MAKE_PROJECT_NAME}
+$packager build \
+  --label org.opencontainers.image.created=$(date +%Y-%m-%dT%H:%M:%S%z) \
+  --label org.opencontainers.image.authors=gh:@ffimnsr \
+  --label org.opencontainers.image.description="$name $latest_version" \
+  --label org.opencontainers.image.revision=$(git rev-parse HEAD) \
+  --label org.opencontainers.image.source=$(git remote get-url origin) \
+  --label org.opencontainers.image.title=$name \
+  --label org.opencontainers.image.url=https://github.com/ffimnsr/midas-rs \
+  --label org.opencontainers.image.version=$latest_version\
+  -f Containerfile \
+  -t ghcr.io/ffimnsr/$name-rs:$latest_version \
+  -t ghcr.io/ffimnsr/$name-rs:latest .
+'''
+
+[tasks.create-package-distroless]
+script = '''
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+packager=docker
+if ! command -v docker &>/dev/null; then
+  packager=podman
+fi
+
+latest_version=${CARGO_MAKE_PROJECT_VERSION}
+name=${CARGO_MAKE_PROJECT_NAME}
+$packager build \
+  --sbom=true \
+  --provenance=true \
+  --label org.opencontainers.image.created=$(date +%Y-%m-%dT%H:%M:%S%z) \
+  --label org.opencontainers.image.authors=gh:@ffimnsr \
+  --label org.opencontainers.image.description="$name $latest_version" \
+  --label org.opencontainers.image.revision=$(git rev-parse HEAD) \
+  --label org.opencontainers.image.source=$(git remote get-url origin) \
+  --label org.opencontainers.image.title=$name \
+  --label org.opencontainers.image.url=https://github.com/ffimnsr/playground \
+  --label org.opencontainers.image.version=$latest_version\
+  -f Containerfile.distroless \
+  -t ghcr.io/ffimnsr/$name-rs:$latest_version \
+  -t ghcr.io/ffimnsr/$name-rs:latest .
+'''
