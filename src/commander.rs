@@ -51,7 +51,7 @@ impl<T: SequelDriver + 'static + ?Sized> Migrator<T> {
             return Ok(());
         }
 
-        println!("Building active migrations list...");
+        println!("Migration list:\n");
         if completed_migrations.is_empty() {
             for it in &available_migrations {
                 println!("{it:013} = Inactive");

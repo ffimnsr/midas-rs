@@ -1,4 +1,3 @@
-use indoc::formatdoc;
 use log::trace;
 use postgres::{Client, NoTls};
 
@@ -38,10 +37,10 @@ impl SequelDriver for Postgres {
     }
 
     fn drop_database(&mut self, db_name: &str) -> Result<(), Error> {
-        let payload = formatdoc! {"
-            DROP DATABASE IF EXISTS `{db_name}`;
-            CREATE DATABASE `{db_name}`;
-        ", db_name = db_name };
+        let payload = format! {"DROP DATABASE IF EXISTS {db_name}"};
+        self.client.execute(&payload, &[])?;
+
+        let payload = format! {"CREATE DATABASE {db_name}"};
         self.client.execute(&payload, &[])?;
         Ok(())
     }

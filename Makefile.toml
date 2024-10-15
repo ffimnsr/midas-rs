@@ -20,7 +20,7 @@ fi
 $packager run -it --rm --name pgsql -p 5432:5432 \
   -e POSTGRES_PASSWORD=postgres \
   -e POSTGRES_DB=startup \
-  -d postgres:16-alpine
+  -d postgres:17-alpine
 '''
 
 [tasks.run-mysql]
