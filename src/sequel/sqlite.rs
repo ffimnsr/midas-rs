@@ -1,3 +1,4 @@
+
 use indoc::indoc;
 use log::trace;
 use rusqlite::{Connection, Result};

@@ -1,6 +1,4 @@
 use clap::{Arg, Command};
-use log::debug;
-#[allow(unused_imports)]
 use std::env;
 use std::path::Path;
 use std::time::Instant;
@@ -9,18 +7,19 @@ use url::Url;
 const PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 const PKG_DESCRIPTION: &str = env!("CARGO_PKG_DESCRIPTION");
 
-use super::commander::Migrator;
-use super::sequel::mysql::Mysql;
-use super::sequel::postgres::Postgres;
-use super::sequel::sqlite::Sqlite;
-use super::sequel::Driver as SequelDriver;
-
-pub(crate) type GenericError = Box<dyn std::error::Error + Send + Sync>;
+use anyhow::Context;
+use anyhow::Result as AnyhowResult;
+use midas_core::commander::Migrator;
+use midas_core::lookup;
+use midas_core::sequel::mysql::Mysql;
+use midas_core::sequel::postgres::Postgres;
+use midas_core::sequel::sqlite::Sqlite;
+use midas_core::sequel::Driver as SequelDriver;
 
 pub(crate) fn midas_entry(
     command_name: &str,
     sub_command: bool,
-) -> Result<(), GenericError> {
+) -> AnyhowResult<()> {
     dotenv::dotenv().or_else(|_| dotenv::from_filename(".env.midas")).ok();
 
     if env::var("RUST_LOG").is_err() {
@@ -86,7 +85,15 @@ pub(crate) fn midas_entry(
         )
         .subcommand(
             Command::new("revert")
-                .about("Reverts the last migration"),
+                .about("Reverts the nth number of migration (defaults to the last migration)")
+                .arg(
+                    Arg::new("steps")
+                        .value_name("N")
+                        .help("The number of migrations to revert")
+                        .num_args(1)
+                        .value_parser(clap::value_parser!(usize))
+                        .default_value("1"),
+                ),
         )
         .subcommand(
             Command::new("init")
@@ -105,9 +112,7 @@ pub(crate) fn midas_entry(
 
         internal_matches
             .subcommand_matches(command_name)
-            .ok_or(format!(
-                "cargo-{command_name} not invoked via cargo command",
-            ))?
+            .with_context(|| format!("cargo-{command_name} not invoked via cargo command"))?
             .clone()
     } else {
         cli_app.get_matches()
@@ -119,7 +124,7 @@ pub(crate) fn midas_entry(
         .or(raw_env_db_url.as_ref())
         .expect("msg: No database connection url was provided");
 
-    debug!("Using DSN: {}", raw_db_url);
+    log::debug!("Using DSN: {}", raw_db_url);
     let default_source_path = Some("migrations".to_string());
     let env_source_path = env::var("MIGRATIONS_ROOT").ok();
     let source = matches
@@ -129,22 +134,22 @@ pub(crate) fn midas_entry(
         .expect("msg: No migration source path was provided");
 
     let source_path = Path::new(&source);
-    let migrations = super::lookup::build_migration_list(source_path)?;
+    let migrations = lookup::build_migration_list(source_path)?;
 
     let start = Instant::now();
 
     let executor = get_executor(raw_db_url);
-    if executor.is_none() {
-        return Err("Unable to initialize executor".into());
-    }
-    let mut migrator = Migrator::new(executor.unwrap(), migrations);
+    let mut migrator = executor
+        .map(|executor| Migrator::new(executor, migrations))
+        .context("Unable to initialize migrator")?;
+
     match matches.subcommand_name() {
         Some("create") => {
             let slug = matches
                 .subcommand_matches("create")
-                .ok_or("No slug was detected")?
+                .context("No subcommand name argument was detected")?
                 .get_one::<String>("name")
-                .ok_or("Slug is either malformed or undecipherable")?;
+                .context("Name argument was either malformed or undecipherable")?;
 
             migrator.create(source_path, slug)?;
         }
@@ -152,7 +157,17 @@ pub(crate) fn midas_entry(
         Some("up") => migrator.up()?,
         Some("down") => migrator.down()?,
         Some("redo") => migrator.redo()?,
-        Some("revert") => migrator.revert()?,
+        Some("revert") => {
+            let value = matches
+                .subcommand_matches("revert")
+                .context("No subcommand step was detected")?
+                .get_one::<usize>("steps")
+                .context("Steps number was invalid")?;
+
+            for _ in 0usize..*value {
+                migrator.revert()?;
+            }
+        }
         Some("init") => migrator.init(source_path, source, raw_db_url)?,
         Some("drop") => migrator.drop(raw_db_url)?,
         None => println!("No subcommand provided"),
@@ -164,9 +179,13 @@ pub(crate) fn midas_entry(
     let seconds = duration.as_secs() % 60;
 
     if minutes == 0 && seconds == 0 {
-        debug!("Operation took less than 1 second.");
+        log::trace!("Operation took less than 1 second.");
     } else {
-        debug!("Operation took {} minutes and {} seconds.", minutes, seconds);
+        log::trace!(
+            "Operation took {} minutes and {} seconds.",
+            minutes,
+            seconds
+        );
     }
 
     Ok(())
@@ -175,7 +194,7 @@ pub(crate) fn midas_entry(
 fn get_executor(raw_db_url: &str) -> Option<Box<dyn SequelDriver>> {
     let db_url = Url::parse(raw_db_url).ok();
     if let Some(db_url) = db_url {
-        debug!("Connecting to database scheme: {}", db_url.scheme());
+        log::debug!("Connecting to database scheme: {}", db_url.scheme());
 
         let driver: Box<dyn SequelDriver> = match db_url.scheme() {
             "file" => Box::new(

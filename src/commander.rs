@@ -4,8 +4,10 @@ use std::iter::Iterator;
 use std::path::Path;
 
 use indoc::formatdoc;
-use log::{debug, trace};
+use prettytable::format::consts;
+use prettytable::{color, row, Attr, Cell, Row, Table};
 use url::Url;
+use anyhow::Result as AnyhowResult;
 
 use crate::lookup::{self, MigrationFiles, VecStr};
 use crate::sequel::{Driver as SequelDriver, VecSerial};
@@ -35,13 +37,13 @@ impl<T: SequelDriver + 'static + ?Sized> Migrator<T> {
         &mut self,
         path: &Path,
         slug: &str,
-    ) -> Result<(), super::GenericError> {
+    ) -> AnyhowResult<()> {
         let fixed_slug = slug.to_ascii_lowercase().replace(' ', "_");
         lookup::create_migration_file(path, &fixed_slug)?;
         Ok(())
     }
 
-    pub fn status(&mut self) -> Result<(), super::GenericError> {
+    pub fn status(&mut self) -> AnyhowResult<()> {
         let completed_migrations = self.executor.get_completed_migrations()?;
         let available_migrations =
             self.migrations.keys().copied().collect::<VecSerial>();
@@ -52,27 +54,31 @@ impl<T: SequelDriver + 'static + ?Sized> Migrator<T> {
         }
 
         println!("Migration list:\n");
-        if completed_migrations.is_empty() {
-            for it in &available_migrations {
-                println!("{it:013} = Inactive");
-            }
+        let mut table = Table::new();
+        table.set_titles(row!["Migration No.", "Status"]);
+        table.set_format(*consts::FORMAT_NO_LINESEP_WITH_TITLE);
 
-            return Ok(());
-        }
-
-        for it in &available_migrations {
-            let does_have = if completed_migrations.contains(it) {
-                "Active"
+        available_migrations.iter().for_each(|it| {
+            let temp_color = if completed_migrations.contains(it) {
+                color::GREEN
             } else {
-                "Inactive"
+                color::RED
             };
-            println!("{it:013} = {does_have}");
-        }
+
+            let migration_no = format!("{it:013}");
+            table.add_row(Row::new(vec![
+                Cell::new(&migration_no).with_style(Attr::Bold),
+                Cell::new(if temp_color == color::GREEN { "Active" } else { "Inactive" })
+                    .with_style(Attr::ForegroundColor(temp_color)),
+            ]));
+        });
+
+        table.printstd();
 
         Ok(())
     }
 
-    pub fn up(&mut self) -> Result<(), super::GenericError> {
+    pub fn up(&mut self) -> AnyhowResult<()> {
         let completed_migrations = self.executor.get_completed_migrations()?;
         let available_migrations =
             self.migrations.keys().copied().collect::<VecSerial>();
@@ -99,7 +105,7 @@ impl<T: SequelDriver + 'static + ?Sized> Migrator<T> {
             let content_up = migration.content_up.as_ref().unwrap();
             let content_up = get_content_string!(content_up);
 
-            trace!("Running the following up query: {:?}", content_up);
+            log::trace!("Running the following up query: {:?}", content_up);
 
             self.executor.migrate(&content_up)?;
             self.executor.add_completed_migration(it.to_owned())?;
@@ -108,7 +114,7 @@ impl<T: SequelDriver + 'static + ?Sized> Migrator<T> {
         Ok(())
     }
 
-    pub fn down(&mut self) -> Result<(), super::GenericError> {
+    pub fn down(&mut self) -> AnyhowResult<()> {
         let completed_migrations = self.executor.get_completed_migrations()?;
         if completed_migrations.is_empty() {
             println!(
@@ -123,7 +129,7 @@ impl<T: SequelDriver + 'static + ?Sized> Migrator<T> {
             let content_down = migration.content_down.as_ref().unwrap();
             let content_down = get_content_string!(content_down);
 
-            trace!("Running the following down query: {:?}", content_down);
+            log::trace!("Running the following down query: {:?}", content_down);
 
             self.executor.migrate(&content_down)?;
 
@@ -139,7 +145,7 @@ impl<T: SequelDriver + 'static + ?Sized> Migrator<T> {
         Ok(())
     }
 
-    pub fn redo(&mut self) -> Result<(), super::GenericError> {
+    pub fn redo(&mut self) -> AnyhowResult<()> {
         let mut current = self.executor.get_last_completed_migration()?;
 
         let current_state = current;
@@ -160,7 +166,7 @@ impl<T: SequelDriver + 'static + ?Sized> Migrator<T> {
             self.executor.delete_completed_migration(current)?;
         }
 
-        trace!("Running the method `redo` {:?}", migration);
+        log::trace!("Running the method `redo` {:?}", migration);
 
         println!("[{current:013}] Applying recent migration in the database.");
         let content_up = migration.content_up.as_ref().unwrap();
@@ -172,7 +178,7 @@ impl<T: SequelDriver + 'static + ?Sized> Migrator<T> {
         Ok(())
     }
 
-    pub fn revert(&mut self) -> Result<(), super::GenericError> {
+    pub fn revert(&mut self) -> AnyhowResult<()> {
         let migrations_count = self.executor.count_migrations()?;
         let current = self.executor.get_last_completed_migration()?;
         if current == -1 {
@@ -203,11 +209,11 @@ impl<T: SequelDriver + 'static + ?Sized> Migrator<T> {
         source_path: &Path,
         source: &str,
         dsn: &str,
-    ) -> Result<(), super::GenericError> {
+    ) -> AnyhowResult<()> {
         let filename = ".env.midas";
         let filepath = std::env::current_dir()?.join(filename);
 
-        debug!("Creating new env file: {:?}", filepath);
+        log::trace!("Creating new env file: {:?}", filepath);
         let mut f = File::create(filepath)?;
         let contents = formatdoc! {"
             DATABASE_URL={}
@@ -216,7 +222,7 @@ impl<T: SequelDriver + 'static + ?Sized> Migrator<T> {
         f.write_all(contents.as_bytes())?;
         f.sync_all()?;
 
-        debug!("Creating new migrations directory: {:?}", source_path);
+        log::trace!("Creating new migrations directory: {:?}", source_path);
         fs::create_dir_all(source_path)?;
         Ok(())
     }
@@ -224,7 +230,7 @@ impl<T: SequelDriver + 'static + ?Sized> Migrator<T> {
     pub fn drop(
         &mut self,
         raw_db_url: &str,
-    ) -> Result<(), super::GenericError> {
+    ) -> AnyhowResult<()> {
         let db_url = Url::parse(raw_db_url).ok();
         if let Some(db_url) = db_url {
             let db_name = db_url.path().trim_start_matches('/');

@@ -12,13 +12,17 @@ license = "MIT OR Apache-2.0"
 keywords = ["sql", "database", "command-line", "migrate", "cli"]
 exclude = [".gitignore"]
 
-[[bin]]
-name = "cargo-migrate"
-path = "src/main.rs"
+[lib]
+name = "midas_core"
+path = "src/lib.rs"
 
 [[bin]]
 name = "midas"
-path = "src/midas.rs"
+path = "src/midas/bin/main.rs"
+
+[[bin]]
+name = "cargo-migrate"
+path = "src/midas/bin/migrate_main.rs"
 
 [dependencies]
 clap = { version = "4.5", features = ["string"] }
@@ -35,6 +39,11 @@ log = "0.4"
 url = "2.5"
 indoc = "2"
 openssl = { version = "0.10", features = ["vendored"] }
+prettytable-rs = "0.10.0"
+thiserror = "2.0.3"
+anyhow = "1.0.93"
+indicatif = "0.17.9"
+indicatif-log-bridge = "0.2.3"
 
 [dev-dependencies]
 tempfile = "3.12"

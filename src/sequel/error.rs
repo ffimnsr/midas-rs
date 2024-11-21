@@ -1,9 +1,12 @@
 pub use ::mysql::Error as MysqlError;
 pub use ::postgres::Error as PostgresError;
 pub use ::rusqlite::Error as SqliteError;
+use std::error::Error as StdError;
 
 use std::error;
 use std::fmt;
+
+use crate::GenericError;
 
 #[derive(Debug, PartialEq)]
 enum Kind {
@@ -14,7 +17,7 @@ enum Kind {
 
 struct ErrorInner {
     kind: Kind,
-    cause: Option<Box<dyn error::Error + Sync + Send>>,
+    cause: Option<GenericError>,
 }
 
 pub struct Error(Box<ErrorInner>);
@@ -36,7 +39,7 @@ impl fmt::Display for Error {
             Kind::Mysql => fmt.write_str("mysql error")?,
         };
         if let Some(ref cause) = self.0.cause {
-            write!(fmt, ": {}", cause)?;
+            write!(fmt, " => {}", cause)?;
         }
         Ok(())
     }
@@ -50,7 +53,15 @@ impl error::Error for Error {
 
 impl From<PostgresError> for Error {
     fn from(value: PostgresError) -> Self {
-        Error::new(Kind::Postgres, value.into_source())
+        let message = value.as_db_error().map(|e| {
+            format!(
+                "{} [{}:{}]",
+                e.message(),
+                e.code().code(),
+                e.severity(),
+            )
+        });
+        Error::new(Kind::Postgres, message.map(|msg| Box::<dyn StdError + Send + Sync>::from(msg)))
     }
 }
 
@@ -69,13 +80,13 @@ impl From<MysqlError> for Error {
 impl Error {
     /// Consumes the error, returning its cause.
     #[allow(dead_code)]
-    pub fn into_source(self) -> Option<Box<dyn error::Error + Sync + Send>> {
+    pub fn into_source(self) -> Option<GenericError> {
         self.0.cause
     }
 
     fn new(
         kind: Kind,
-        cause: Option<Box<dyn error::Error + Sync + Send>>,
+        cause: Option<GenericError>,
     ) -> Error {
         Error(Box::new(ErrorInner { kind, cause }))
     }

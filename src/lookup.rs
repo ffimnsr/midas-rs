@@ -1,5 +1,5 @@
+use anyhow::{Context, Result as AnyhowResult};
 use indoc::indoc;
-use log::debug;
 use regex::Regex;
 use std::collections::BTreeMap;
 use std::fs::{read_dir, File};
@@ -31,36 +31,31 @@ impl MigrationFile {
 
 pub type MigrationFiles = BTreeMap<i64, MigrationFile>;
 
-fn parse_file(filename: &str) -> Result<MigrationFile, super::GenericError> {
+fn parse_file(filename: &str) -> AnyhowResult<MigrationFile> {
     let re =
         Regex::new(r"^(?P<number>[0-9]{13})_(?P<name>[_0-9a-zA-Z]*)\.sql$")?;
 
-    let res = match re.captures(filename) {
-        None => {
-            return Err(format!("Invalid filename found on {filename}").into())
-        }
-        Some(c) => c,
-    };
+    let result = re
+        .captures(filename)
+        .with_context(|| format!("Invalid filename found on {filename}"))?;
 
-    let number = res
+    let number = result
         .name("number")
-        .ok_or("The migration file timestamp is malformed")?
+        .context("The migration file timestamp is missing")?
         .as_str()
         .parse::<i64>()?;
 
     Ok(MigrationFile::new(filename, number))
 }
 
-pub fn build_migration_list(
-    path: &Path,
-) -> Result<MigrationFiles, super::GenericError> {
+pub fn build_migration_list(path: &Path) -> AnyhowResult<MigrationFiles> {
     let mut files: MigrationFiles = BTreeMap::new();
 
     for entry in read_dir(path)? {
         let entry = entry?;
         let filename = entry.file_name();
         let Ok(info) =
-            parse_file(filename.to_str().ok_or("Filename is invalid")?)
+            parse_file(filename.to_str().context("Filename is not valid")?)
         else {
             continue;
         };
@@ -78,11 +73,11 @@ pub fn build_migration_list(
         let pos_up = split_vec
             .iter()
             .position(|s| s == "-- !UP" || s == "-- !UP\r")
-            .ok_or("Parser can't find the UP migration")?;
+            .context("Parser can't find the UP migration")?;
         let pos_down = split_vec
             .iter()
             .position(|s| s == "-- !DOWN" || s == "-- !DOWN\r")
-            .ok_or("Parser can't find the DOWN migration")?;
+            .context("Parser can't find the DOWN migration")?;
 
         let content_up = &split_vec[(pos_up + 1)..pos_down];
         let content_down = &split_vec[(pos_down + 1)..];
@@ -93,9 +88,10 @@ pub fn build_migration_list(
             ..info
         };
 
-        debug!(
+        log::debug!(
             "Running the migration: {:?} {:?}",
-            migration, migration.filename
+            migration,
+            migration.filename
         );
         files.insert(migration.number, migration);
     }
@@ -105,18 +101,16 @@ pub fn build_migration_list(
 
 fn timestamp() -> String {
     let start = SystemTime::now();
-    let since_the_epoch = start.duration_since(UNIX_EPOCH).unwrap();
+    let since_the_epoch =
+        start.duration_since(UNIX_EPOCH).expect("Time went backwards");
     since_the_epoch.as_millis().to_string()
 }
 
-pub fn create_migration_file(
-    path: &Path,
-    slug: &str,
-) -> Result<(), super::GenericError> {
+pub fn create_migration_file(path: &Path, slug: &str) -> AnyhowResult<()> {
     let filename = timestamp() + "_" + slug + ".sql";
-    let filepath = path.join(filename.clone());
+    let filepath = path.join(filename);
 
-    debug!("Creating new migration file: {:?}", filepath);
+    log::debug!("Creating new migration file: {:?}", filepath);
     let mut f = File::create(filepath)?;
     let contents = indoc! {"\
         -- # Put the your SQL below migration seperator.

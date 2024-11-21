@@ -1,3 +1,4 @@
+
 use indoc::{formatdoc, indoc};
 use log::trace;
 use mysql::{params, prelude::Queryable, Pool, PooledConn};
