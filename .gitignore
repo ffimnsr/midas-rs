@@ -2,3 +2,4 @@
 **/*.rs.bk
 .env
 .env.midas
+.migration-state

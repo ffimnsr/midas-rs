@@ -8,7 +8,13 @@ create extension if not exists pgcrypto;
 -- https://docs.postgrest.org/en/v12/explanations/db_authz.html#functions
 alter default privileges in schema public revoke execute on functions from PUBLIC;
 
+do $$
+begin
 create role sesame_su_startup_data nologin;
+exception when duplicate_object then raise notice '%, skipping', sqlerrm using errcode = sqlstate;
+end
+$$;
+
 grant all privileges on database startup to sesame_su_startup_data;
 grant all privileges on schema public to sesame_su_startup_data;
 grant all privileges on all tables in schema public to sesame_su_startup_data;
@@ -19,7 +25,13 @@ alter default privileges in schema public grant all on sequences to sesame_su_st
 alter default privileges in schema public grant all on functions to sesame_su_startup_data;
 alter default privileges in schema public grant all on types to sesame_su_startup_data;
 
+do $$
+begin
 create role sesame_read_startup_data nologin;
+exception when duplicate_object then raise notice '%, skipping', sqlerrm using errcode = sqlstate;
+end
+$$;
+
 grant usage on schema public to sesame_read_startup_data;
 grant select on all tables in schema public to sesame_read_startup_data;
 grant usage, select on all sequences in schema public to sesame_read_startup_data;
@@ -28,7 +40,13 @@ alter default privileges in schema public grant select on tables to sesame_read_
 alter default privileges in schema public grant usage, select on sequences to sesame_read_startup_data;
 alter default privileges in schema public grant execute on functions to sesame_read_startup_data;
 
+do $$
+begin
 create role sesame_write_startup_data nologin;
+exception when duplicate_object then raise notice '%, skipping', sqlerrm using errcode = sqlstate;
+end
+$$;
+
 grant usage on schema public to sesame_write_startup_data;
 grant insert, update, delete on all tables in schema public to sesame_write_startup_data;
 grant usage, update on all sequences in schema public to sesame_write_startup_data;
@@ -37,11 +55,23 @@ alter default privileges in schema public grant insert, update, delete on tables
 alter default privileges in schema public grant usage, update on sequences to sesame_write_startup_data;
 alter default privileges in schema public grant execute on functions to sesame_write_startup_data;
 
+do $$
+begin
 create role webuser nologin;
+exception when duplicate_object then raise notice '%, skipping', sqlerrm using errcode = sqlstate;
+end
+$$;
+
 grant sesame_read_startup_data to webuser;
 grant sesame_write_startup_data to webuser;
 
+do $$
+begin
 create role anon nologin;
+exception when duplicate_object then raise notice '%, skipping', sqlerrm using errcode = sqlstate;
+end
+$$;
+
 grant sesame_read_startup_data to anon;
 
 create or replace function get_user_uid()

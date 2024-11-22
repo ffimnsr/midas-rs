@@ -16,6 +16,7 @@ alter type new_salary_detail rename to salary_detail;
 alter table jobs alter column salary set default row('5', '10', 'USD', 'hourly')::salary_detail;
 update jobs set salary = row('5', '10', 'USD', 'hourly')::salary_detail where salary is null;
 
+
 -- !DOWN
 
 -- No down migration for this migration

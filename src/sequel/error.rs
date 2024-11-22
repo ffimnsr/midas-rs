@@ -1,7 +1,6 @@
 pub use ::mysql::Error as MysqlError;
 pub use ::postgres::Error as PostgresError;
 pub use ::rusqlite::Error as SqliteError;
-use std::error::Error as StdError;
 
 use std::error;
 use std::fmt;
@@ -54,14 +53,9 @@ impl error::Error for Error {
 impl From<PostgresError> for Error {
     fn from(value: PostgresError) -> Self {
         let message = value.as_db_error().map(|e| {
-            format!(
-                "{} [{}:{}]",
-                e.message(),
-                e.code().code(),
-                e.severity(),
-            )
+            format!("{} [{}:{}]", e.message(), e.code().code(), e.severity(),)
         });
-        Error::new(Kind::Postgres, message.map(|msg| Box::<dyn StdError + Send + Sync>::from(msg)))
+        Error::new(Kind::Postgres, message.map(GenericError::from))
     }
 }
 
@@ -84,10 +78,7 @@ impl Error {
         self.0.cause
     }
 
-    fn new(
-        kind: Kind,
-        cause: Option<GenericError>,
-    ) -> Error {
+    fn new(kind: Kind, cause: Option<GenericError>) -> Error {
         Error(Box::new(ErrorInner { kind, cause }))
     }
 }

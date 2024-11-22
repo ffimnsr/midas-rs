@@ -1,7 +1,7 @@
 [package]
 name = "midas"
-version = "0.6.8"
-authors = ["Edward Fitz Abucay gh:@ffimnsr"]
+version = "0.7.0"
+authors = ["Edward Fitz Abucay <gh:@ffimnsr>"]
 edition = "2021"
 readme = "README.md"
 description = "Do painless migration 🦀"
@@ -44,6 +44,10 @@ thiserror = "2.0.3"
 anyhow = "1.0.93"
 indicatif = "0.17.9"
 indicatif-log-bridge = "0.2.3"
+nom = "7.1.3"
+serde = { version = "1.0.215", features = ["derive"] }
+serde_yaml = "0.9.34"
+rand = "0.8.5"
 
 [dev-dependencies]
 tempfile = "3.12"

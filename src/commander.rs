@@ -2,12 +2,16 @@ use std::fs::{self, File};
 use std::io::Write;
 use std::iter::Iterator;
 use std::path::Path;
+use std::thread;
+use std::time::Duration;
 
+use anyhow::{Context, Result as AnyhowResult};
+use indicatif::{ProgressBar, ProgressStyle};
 use indoc::formatdoc;
 use prettytable::format::consts;
 use prettytable::{color, row, Attr, Cell, Row, Table};
+use rand::Rng;
 use url::Url;
-use anyhow::Result as AnyhowResult;
 
 use crate::lookup::{self, MigrationFiles, VecStr};
 use crate::sequel::{Driver as SequelDriver, VecSerial};
@@ -28,16 +32,22 @@ pub struct Migrator<T: ?Sized> {
     migrations: MigrationFiles,
 }
 
+fn ensure_migration_state_dir_exists() -> AnyhowResult<()> {
+    let migration_dir = Path::new(".migrations-state");
+    if !migration_dir.exists() {
+        fs::create_dir_all(migration_dir)
+            .context("Failed to create migrations directory")?;
+    }
+
+    Ok(())
+}
+
 impl<T: SequelDriver + 'static + ?Sized> Migrator<T> {
     pub fn new(executor: Box<T>, migrations: MigrationFiles) -> Self {
         Self { executor, migrations }
     }
 
-    pub fn create(
-        &mut self,
-        path: &Path,
-        slug: &str,
-    ) -> AnyhowResult<()> {
+    pub fn create(&mut self, path: &Path, slug: &str) -> AnyhowResult<()> {
         let fixed_slug = slug.to_ascii_lowercase().replace(' ', "_");
         lookup::create_migration_file(path, &fixed_slug)?;
         Ok(())
@@ -53,7 +63,7 @@ impl<T: SequelDriver + 'static + ?Sized> Migrator<T> {
             return Ok(());
         }
 
-        println!("Migration list:\n");
+        println!("\n");
         let mut table = Table::new();
         table.set_titles(row!["Migration No.", "Status"]);
         table.set_format(*consts::FORMAT_NO_LINESEP_WITH_TITLE);
@@ -68,17 +78,29 @@ impl<T: SequelDriver + 'static + ?Sized> Migrator<T> {
             let migration_no = format!("{it:013}");
             table.add_row(Row::new(vec![
                 Cell::new(&migration_no).with_style(Attr::Bold),
-                Cell::new(if temp_color == color::GREEN { "Active" } else { "Inactive" })
-                    .with_style(Attr::ForegroundColor(temp_color)),
+                Cell::new(if temp_color == color::GREEN {
+                    "Active"
+                } else {
+                    "Inactive"
+                })
+                .with_style(Attr::ForegroundColor(temp_color)),
             ]));
         });
 
         table.printstd();
+        println!();
+
+        let available_migrations_count = available_migrations.len();
+        let completed_migrations_count = completed_migrations.len();
+        println!("Completed migrations: {completed_migrations_count}");
+        println!("Total migrations: {available_migrations_count}");
 
         Ok(())
     }
 
     pub fn up(&mut self) -> AnyhowResult<()> {
+        ensure_migration_state_dir_exists()?;
+
         let completed_migrations = self.executor.get_completed_migrations()?;
         let available_migrations =
             self.migrations.keys().copied().collect::<VecSerial>();
@@ -88,33 +110,55 @@ impl<T: SequelDriver + 'static + ?Sized> Migrator<T> {
             return Ok(());
         }
 
-        let filtered = available_migrations
+        let filtered: Vec<_> = available_migrations
             .iter()
             .filter(|s| !completed_migrations.contains(s))
-            .map(std::borrow::ToOwned::to_owned)
-            .collect::<VecSerial>();
+            .copied()
+            .collect();
 
         if filtered.is_empty() {
             println!("Migrations are all up-to-date.");
             return Ok(());
         }
 
+        let pb = ProgressBar::new(filtered.len() as u64);
+        pb.set_style(ProgressStyle::with_template(
+            "{spinner:.green} [{prefix:.bold.dim}] {wide_msg:.cyan/blue} ",
+        )?);
+        let mut rng = rand::thread_rng();
         for it in &filtered {
-            println!("[{it:013}] Applying migration in the database.");
-            let migration = self.migrations.get(it).unwrap();
-            let content_up = migration.content_up.as_ref().unwrap();
+            thread::sleep(Duration::from_millis(rng.gen_range(40..300)));
+            pb.set_prefix(format!("{it:013}"));
+
+            let migration =
+                self.migrations.get(it).context("Migration file not found")?;
+            let filename_parts: Vec<&str> =
+                migration.filename.splitn(2, '_').collect();
+            let migration_name = filename_parts
+                .get(1)
+                .and_then(|s| s.strip_suffix(".sql"))
+                .context("Migration name not found")?;
+
+            pb.set_message(format!("Applying migration: {migration_name}"));
+
+            let content_up = migration
+                .content_up
+                .as_ref()
+                .context("Migration content not found")?;
             let content_up = get_content_string!(content_up);
 
-            log::trace!("Running the following up query: {:?}", content_up);
-
             self.executor.migrate(&content_up)?;
-            self.executor.add_completed_migration(it.to_owned())?;
+            self.executor.add_completed_migration(*it)?;
+            pb.inc(1);
         }
+        pb.finish();
 
         Ok(())
     }
 
     pub fn down(&mut self) -> AnyhowResult<()> {
+        ensure_migration_state_dir_exists()?;
+
         let completed_migrations = self.executor.get_completed_migrations()?;
         if completed_migrations.is_empty() {
             println!(
@@ -123,43 +167,61 @@ impl<T: SequelDriver + 'static + ?Sized> Migrator<T> {
             return Ok(());
         }
 
+        let pb = ProgressBar::new(completed_migrations.len() as u64);
+        pb.set_style(ProgressStyle::with_template(
+            "{spinner:.green} [{prefix:.bold.dim}] {wide_msg:.cyan/blue} ",
+        )?);
+        let mut rng = rand::thread_rng();
         for it in completed_migrations.iter().rev() {
-            println!("[{it:013}] Undo migration from database.");
-            let migration = self.migrations.get(it).unwrap();
-            let content_down = migration.content_down.as_ref().unwrap();
+            thread::sleep(Duration::from_millis(rng.gen_range(40..300)));
+            pb.set_prefix(format!("{it:013}"));
+            let migration =
+                self.migrations.get(it).context("Migration file not found")?;
+            let filename_parts: Vec<&str> =
+                migration.filename.splitn(2, '_').collect();
+            let migration_name = filename_parts
+                .get(1)
+                .and_then(|s| s.strip_suffix(".sql"))
+                .context("Migration name not found")?;
+
+            pb.set_message(format!("Undoing migration: {migration_name}"));
+
+            let content_down = migration
+                .content_down
+                .as_ref()
+                .context("Migration content not found")?;
             let content_down = get_content_string!(content_down);
 
-            log::trace!("Running the following down query: {:?}", content_down);
-
             self.executor.migrate(&content_down)?;
-
-            if std::env::var("MIGRATIONS_SKIP_LAST").is_ok() {
-                if !completed_migrations.first().eq(&Some(it)) {
-                    self.executor.delete_completed_migration(it.to_owned())?;
-                }
-            } else {
+            if std::env::var("MIGRATIONS_SKIP_LAST").is_err()
+                || !completed_migrations.first().eq(&Some(it))
+            {
                 self.executor.delete_completed_migration(it.to_owned())?;
             }
+            pb.inc(1);
         }
+        pb.finish();
 
         Ok(())
     }
 
     pub fn redo(&mut self) -> AnyhowResult<()> {
-        let mut current = self.executor.get_last_completed_migration()?;
+        let current = self.executor.get_last_completed_migration()?;
+        let current = if current == -1 { 0 } else { current };
 
-        let current_state = current;
-        if current_state == -1 {
-            current = 0;
-        }
+        let migration = self
+            .migrations
+            .get(&current)
+            .context("Migration file not found")?;
 
-        let migration = self.migrations.get(&current).unwrap();
-
-        if current_state != -1 {
+        if current != 0 {
             println!(
                 "[{current:013}] Clearing recent migration from database."
             );
-            let content_down = migration.content_down.as_ref().unwrap();
+            let content_down = migration
+                .content_down
+                .as_ref()
+                .context("Migration content not found")?;
             let content_down = get_content_string!(content_down);
 
             self.executor.migrate(&content_down)?;
@@ -169,12 +231,14 @@ impl<T: SequelDriver + 'static + ?Sized> Migrator<T> {
         log::trace!("Running the method `redo` {:?}", migration);
 
         println!("[{current:013}] Applying recent migration in the database.");
-        let content_up = migration.content_up.as_ref().unwrap();
+        let content_up = migration
+            .content_up
+            .as_ref()
+            .context("Migration content not found")?;
         let content_up = get_content_string!(content_up);
 
         self.executor.migrate(&content_up)?;
         self.executor.add_completed_migration(current)?;
-
         Ok(())
     }
 
@@ -189,16 +253,20 @@ impl<T: SequelDriver + 'static + ?Sized> Migrator<T> {
         }
 
         println!("[{current:013}] Reverting actions from last migration.");
-        let migration = self.migrations.get(&current).unwrap();
-        let content_down = migration.content_down.as_ref().unwrap();
+        let migration = self
+            .migrations
+            .get(&current)
+            .context("Migration file not found")?;
+        let content_down = migration
+            .content_down
+            .as_ref()
+            .context("Migration content not found")?;
         let content_down = get_content_string!(content_down);
 
         self.executor.migrate(&content_down)?;
-        if std::env::var("MIGRATIONS_SKIP_LAST").is_ok() {
-            if migrations_count > 1 {
-                self.executor.delete_last_completed_migration()?;
-            }
-        } else {
+        if migrations_count > 1
+            || std::env::var("MIGRATIONS_SKIP_LAST").is_err()
+        {
             self.executor.delete_last_completed_migration()?;
         }
         Ok(())
@@ -208,7 +276,7 @@ impl<T: SequelDriver + 'static + ?Sized> Migrator<T> {
         &self,
         source_path: &Path,
         source: &str,
-        dsn: &str,
+        db_url: &str,
     ) -> AnyhowResult<()> {
         let filename = ".env.midas";
         let filepath = std::env::current_dir()?.join(filename);
@@ -218,7 +286,7 @@ impl<T: SequelDriver + 'static + ?Sized> Migrator<T> {
         let contents = formatdoc! {"
             DATABASE_URL={}
             MIGRATIONS_ROOT={}
-        ", dsn, source};
+        ", db_url, source};
         f.write_all(contents.as_bytes())?;
         f.sync_all()?;
 
@@ -227,11 +295,8 @@ impl<T: SequelDriver + 'static + ?Sized> Migrator<T> {
         Ok(())
     }
 
-    pub fn drop(
-        &mut self,
-        raw_db_url: &str,
-    ) -> AnyhowResult<()> {
-        let db_url = Url::parse(raw_db_url).ok();
+    pub fn drop(&mut self, db_url: &str) -> AnyhowResult<()> {
+        let db_url = Url::parse(db_url).ok();
         if let Some(db_url) = db_url {
             let db_name = db_url.path().trim_start_matches('/');
             self.executor.drop_database(db_name)?;

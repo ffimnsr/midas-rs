@@ -2,7 +2,6 @@ use clap::{Arg, Command};
 use std::env;
 use std::path::Path;
 use std::time::Instant;
-use url::Url;
 
 const PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 const PKG_DESCRIPTION: &str = env!("CARGO_PKG_DESCRIPTION");
@@ -112,36 +111,46 @@ pub(crate) fn midas_entry(
 
         internal_matches
             .subcommand_matches(command_name)
-            .with_context(|| format!("cargo-{command_name} not invoked via cargo command"))?
+            .with_context(|| {
+                format!("cargo-{command_name} not invoked via cargo command")
+            })?
             .clone()
     } else {
         cli_app.get_matches()
     };
 
-    let raw_env_db_url = env::var("DATABASE_URL").ok();
-    let raw_db_url = matches
+    // Read the database connection url from the environment variables
+    // From the following possible sources:
+    // 1. DATABASE_URL
+    // 2. DB_URL
+    // 3. DSN
+    let env_db_url_1 = env::var("DATABASE_URL").ok();
+    let env_db_url_2 = env::var("DB_URL").ok();
+    let env_db_url_3 = env::var("DSN").ok();
+    let db_url = matches
         .get_one::<String>("database")
-        .or(raw_env_db_url.as_ref())
-        .expect("msg: No database connection url was provided");
+        .or(env_db_url_1.as_ref())
+        .or(env_db_url_2.as_ref())
+        .or(env_db_url_3.as_ref())
+        .context("No database connection url was provided")?;
 
-    log::debug!("Using DSN: {}", raw_db_url);
+    log::debug!("Using DSN: {}", db_url);
     let default_source_path = Some("migrations".to_string());
     let env_source_path = env::var("MIGRATIONS_ROOT").ok();
     let source = matches
         .get_one::<String>("source")
         .or(env_source_path.as_ref())
         .or(default_source_path.as_ref())
-        .expect("msg: No migration source path was provided");
+        .context("No migration source path was provided")?;
 
     let source_path = Path::new(&source);
     let migrations = lookup::build_migration_list(source_path)?;
 
     let start = Instant::now();
 
-    let executor = get_executor(raw_db_url);
-    let mut migrator = executor
-        .map(|executor| Migrator::new(executor, migrations))
-        .context("Unable to initialize migrator")?;
+    let executor = get_executor(db_url);
+    let mut migrator =
+        executor.map(|executor| Migrator::new(executor, migrations))?;
 
     match matches.subcommand_name() {
         Some("create") => {
@@ -149,7 +158,9 @@ pub(crate) fn midas_entry(
                 .subcommand_matches("create")
                 .context("No subcommand name argument was detected")?
                 .get_one::<String>("name")
-                .context("Name argument was either malformed or undecipherable")?;
+                .context(
+                    "Name argument was either malformed or undecipherable",
+                )?;
 
             migrator.create(source_path, slug)?;
         }
@@ -168,8 +179,8 @@ pub(crate) fn midas_entry(
                 migrator.revert()?;
             }
         }
-        Some("init") => migrator.init(source_path, source, raw_db_url)?,
-        Some("drop") => migrator.drop(raw_db_url)?,
+        Some("init") => migrator.init(source_path, source, db_url)?,
+        Some("drop") => migrator.drop(db_url)?,
         None => println!("No subcommand provided"),
         _ => println!("Invalid subcommand provided"),
     }
@@ -191,30 +202,31 @@ pub(crate) fn midas_entry(
     Ok(())
 }
 
-fn get_executor(raw_db_url: &str) -> Option<Box<dyn SequelDriver>> {
-    let db_url = Url::parse(raw_db_url).ok();
-    if let Some(db_url) = db_url {
-        log::debug!("Connecting to database scheme: {}", db_url.scheme());
+fn get_executor(db_url: &str) -> AnyhowResult<Box<dyn SequelDriver>> {
+    use anyhow::{anyhow, Context};
+    use url::Url;
 
-        let driver: Box<dyn SequelDriver> = match db_url.scheme() {
-            "file" => Box::new(
-                Sqlite::new(raw_db_url)
-                    .expect("Failed to create Sqlite driver"),
-            ),
-            "mysql" => Box::new(
-                Mysql::new(raw_db_url).expect("Failed to create Mysql driver"),
-            ),
-            "postgres" => Box::new(
-                Postgres::new(raw_db_url)
-                    .expect("Failed to create Postgres driver"),
-            ),
-            _ => return None,
-        };
+    let url = Url::parse(db_url).context("Failed to parse database URL")?;
+    log::debug!("Connecting to database scheme: {}", url.scheme());
 
-        Some(driver)
-    } else {
-        Some(Box::new(
-            Sqlite::new(raw_db_url).expect("Failed to create Sqlite driver"),
-        ))
-    }
+    let driver: Box<dyn SequelDriver> = match url.scheme() {
+        "file" => Box::new(
+            Sqlite::new(db_url).context("Failed to create Sqlite driver")?,
+        ),
+        "mysql" => Box::new(
+            Mysql::new(db_url).context("Failed to create Mysql driver")?,
+        ),
+        "postgres" => Box::new(
+            Postgres::new(db_url)
+                .context("Failed to create Postgres driver")?,
+        ),
+        _ => {
+            return Err(anyhow!(
+                "Unsupported database scheme: {}",
+                url.scheme()
+            ))
+        }
+    };
+
+    Ok(driver)
 }

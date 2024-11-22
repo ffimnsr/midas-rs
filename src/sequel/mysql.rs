@@ -1,30 +1,25 @@
-
 use indoc::{formatdoc, indoc};
 use log::trace;
 use mysql::{params, prelude::Queryable, Pool, PooledConn};
 
-use super::{Driver as SequelDriver, Error, VecSerial};
+use super::{AnyhowResult, Driver as SequelDriver, VecSerial};
 
 pub struct Mysql {
     conn: PooledConn,
 }
 
 impl Mysql {
-    pub fn new(database_url: &str) -> Result<Self, Error> {
+    pub fn new(database_url: &str) -> AnyhowResult<Self> {
         let pool = Pool::new(database_url)?;
         let conn = pool.get_conn()?;
         let mut db = Mysql { conn };
-        db.ensure_migration_schema_exists()?;
+        db.ensure_midas_schema()?;
         Ok(db)
     }
 }
 
 impl SequelDriver for Mysql {
-    fn ensure_migration_schema_exists(&mut self) -> Result<(), Error> {
-        Ok(())
-    }
-
-    fn ensure_migration_table_exists(&mut self) -> Result<(), Error> {
+    fn ensure_midas_schema(&mut self) -> AnyhowResult<()> {
         let payload = indoc! {"
             CREATE TABLE IF NOT EXISTS __schema_migrations (
                 id INT NOT NULL AUTO_INCREMENT,
@@ -36,13 +31,13 @@ impl SequelDriver for Mysql {
         Ok(())
     }
 
-    fn drop_migration_table(&mut self) -> Result<(), Error> {
+    fn drop_migration_table(&mut self) -> AnyhowResult<()> {
         let payload = "DROP TABLE __schema_migrations";
         self.conn.query_drop(payload)?;
         Ok(())
     }
 
-    fn drop_database(&mut self, db_name: &str) -> Result<(), Error> {
+    fn drop_database(&mut self, db_name: &str) -> AnyhowResult<()> {
         let payload = formatdoc! {"
             DROP DATABASE IF EXISTS `{db_name}`;
             CREATE DATABASE `{db_name}`;
@@ -51,7 +46,7 @@ impl SequelDriver for Mysql {
         Ok(())
     }
 
-    fn count_migrations(&mut self) -> Result<i64, Error> {
+    fn count_migrations(&mut self) -> AnyhowResult<i64> {
         trace!("Retrieving migrations count");
         let payload = "SELECT COUNT(*) as count FROM __schema_migrations";
         let row: Option<i64> = self.conn.query_first(payload)?;
@@ -59,7 +54,7 @@ impl SequelDriver for Mysql {
         Ok(result)
     }
 
-    fn get_completed_migrations(&mut self) -> Result<VecSerial, Error> {
+    fn get_completed_migrations(&mut self) -> AnyhowResult<VecSerial> {
         trace!("Retrieving all completed migrations");
         let payload =
             "SELECT migration FROM __schema_migrations ORDER BY id ASC";
@@ -67,7 +62,7 @@ impl SequelDriver for Mysql {
         Ok(result)
     }
 
-    fn get_last_completed_migration(&mut self) -> Result<i64, Error> {
+    fn get_last_completed_migration(&mut self) -> AnyhowResult<i64> {
         trace!("Checking and retrieving the last migration stored on migrations table");
         let payload = "SELECT migration FROM __schema_migrations ORDER BY id DESC LIMIT 1";
         let row: Option<i64> = self.conn.query_first(payload)?;
@@ -78,7 +73,7 @@ impl SequelDriver for Mysql {
     fn add_completed_migration(
         &mut self,
         migration_number: i64,
-    ) -> Result<(), Error> {
+    ) -> AnyhowResult<()> {
         trace!("Adding migration to migrations table");
         let payload =
             "INSERT INTO __schema_migrations (migration) VALUES (:migration_number)";
@@ -92,7 +87,7 @@ impl SequelDriver for Mysql {
     fn delete_completed_migration(
         &mut self,
         migration_number: i64,
-    ) -> Result<(), Error> {
+    ) -> AnyhowResult<()> {
         trace!("Removing a migration in the migrations table");
         let payload =
             "DELETE FROM __schema_migrations WHERE migration = :migration_number";
@@ -103,15 +98,19 @@ impl SequelDriver for Mysql {
         Ok(())
     }
 
-    fn delete_last_completed_migration(&mut self) -> Result<(), Error> {
+    fn delete_last_completed_migration(&mut self) -> AnyhowResult<()> {
         let payload =
             "DELETE FROM __schema_migrations WHERE id=(SELECT MAX(id) FROM __schema_migrations);";
         self.conn.query_drop(payload)?;
         Ok(())
     }
 
-    fn migrate(&mut self, query: &str) -> Result<(), Error> {
+    fn migrate(&mut self, query: &str) -> AnyhowResult<()> {
         self.conn.query_drop(query)?;
         Ok(())
+    }
+
+    fn db_name(&self) -> &str {
+        ""
     }
 }
