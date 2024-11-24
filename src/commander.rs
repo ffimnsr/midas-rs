@@ -14,6 +14,7 @@ use rand::Rng;
 use url::Url;
 
 use crate::lookup::{self, MigrationFiles, VecStr};
+use crate::nom_parser::parse_sql;
 use crate::sequel::{Driver as SequelDriver, VecSerial};
 
 macro_rules! get_content_string {
@@ -147,8 +148,20 @@ impl<T: SequelDriver + 'static + ?Sized> Migrator<T> {
                 .context("Migration content not found")?;
             let content_up = get_content_string!(content_up);
 
+            let content_up_clone = content_up.clone();
+            let table_name = parse_sql(&content_up_clone);
+
+            let tables = table_name
+                .map(|(_, tables)| tables)
+                .unwrap_or(vec![]);
+
+            for table in tables {
+                log::info!("Table name: {:#?}", table);
+            }
+
             self.executor.migrate(&content_up)?;
             self.executor.add_completed_migration(*it)?;
+
             pb.inc(1);
         }
         pb.finish();

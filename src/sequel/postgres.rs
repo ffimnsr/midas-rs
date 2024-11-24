@@ -18,8 +18,9 @@ impl Postgres {
             .and_then(|s| s.last())
             .context("Database name not found")?;
 
-        let client = Client::connect(url.as_str(), NoTls)?;
+        log::info!("Connecting to database: {}", database_name);
 
+        let client = Client::connect(url.as_str(), NoTls)?;
         let mut db = Postgres { client, database_name: database_name.into() };
         db.ensure_midas_schema()?;
         Ok(db)
@@ -110,7 +111,7 @@ impl SequelDriver for Postgres {
 
     fn delete_last_completed_migration(&mut self) -> AnyhowResult<()> {
         let payload =
-            "delete from midas.__schema_migrations where id=(select max(id) from __schema_migrations);";
+            "delete from midas.__schema_migrations where id=(select max(id) from midas.__schema_migrations);";
         self.client.execute(payload, &[])?;
         Ok(())
     }
