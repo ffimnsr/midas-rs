@@ -110,7 +110,7 @@ impl SequelDriver for Postgres {
 
     fn delete_last_completed_migration(&mut self) -> AnyhowResult<()> {
         let payload =
-            "delete from midas.__schema_migrations where id=(select max(id) from __schema_migrations);";
+            "delete from midas.__schema_migrations where id=(select max(id) from midas.__schema_migrations);";
         self.client.execute(payload, &[])?;
         Ok(())
     }
