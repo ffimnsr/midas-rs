@@ -1,5 +1,4 @@
 use indoc::indoc;
-use log::trace;
 use rusqlite::Connection;
 
 use super::{AnyhowResult, Driver as SequelDriver, VecSerial};
@@ -35,13 +34,13 @@ impl SequelDriver for Sqlite {
         Ok(())
     }
 
-    fn drop_database(&mut self, _: &str) -> AnyhowResult<()> {
+    fn drop_database_schemas(&mut self) -> AnyhowResult<()> {
         // Cannot drop database in SQLite
         Ok(())
     }
 
     fn count_migrations(&mut self) -> AnyhowResult<i64> {
-        trace!("Retrieving migrations count");
+        log::trace!("Retrieving migrations count");
         let payload = "SELECT COUNT(*) as count FROM __schema_migrations";
         let mut stmt = self.conn.prepare(payload)?;
         let result = stmt.query_row((), |row| row.get(0))?;
@@ -49,7 +48,7 @@ impl SequelDriver for Sqlite {
     }
 
     fn get_completed_migrations(&mut self) -> AnyhowResult<VecSerial> {
-        trace!("Retrieving all completed migrations");
+        log::trace!("Retrieving all completed migrations");
         let payload =
             "SELECT migration FROM __schema_migrations ORDER BY id ASC";
         let mut stmt = self.conn.prepare(payload)?;
@@ -59,7 +58,7 @@ impl SequelDriver for Sqlite {
     }
 
     fn get_last_completed_migration(&mut self) -> AnyhowResult<i64> {
-        trace!("Checking and retrieving the last migration stored on migrations table");
+        log::trace!("Checking and retrieving the last migration stored on migrations table");
         let payload = "SELECT migration FROM __schema_migrations ORDER BY id DESC LIMIT 1";
         let mut stmt = self.conn.prepare(payload)?;
         let result = stmt.query_row((), |row| row.get(0))?;
@@ -70,7 +69,7 @@ impl SequelDriver for Sqlite {
         &mut self,
         migration_number: i64,
     ) -> AnyhowResult<()> {
-        trace!("Adding migration to migrations table");
+        log::trace!("Adding migration to migrations table");
         let payload =
             "INSERT INTO __schema_migrations (migration) VALUES ($1)";
         self.conn.execute(payload, [&migration_number])?;
@@ -81,7 +80,7 @@ impl SequelDriver for Sqlite {
         &mut self,
         migration_number: i64,
     ) -> AnyhowResult<()> {
-        trace!("Removing a migration in the migrations table");
+        log::trace!("Removing a migration in the migrations table");
         let payload = "DELETE FROM __schema_migrations WHERE migration = $1";
         self.conn.execute(payload, [&migration_number])?;
         Ok(())
@@ -97,6 +96,10 @@ impl SequelDriver for Sqlite {
     fn migrate(&mut self, query: &str) -> AnyhowResult<()> {
         self.conn.execute(query, ())?;
         Ok(())
+    }
+
+    fn get_db_table_state(&mut self, _: &str) -> AnyhowResult<()> {
+        unimplemented!()
     }
 
     fn db_name(&self) -> &str {

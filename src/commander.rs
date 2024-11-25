@@ -2,20 +2,25 @@ use std::fs::{self, File};
 use std::io::Write;
 use std::iter::Iterator;
 use std::path::Path;
+use std::rc::Rc;
+use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
 use anyhow::{Context, Result as AnyhowResult};
 use indicatif::{ProgressBar, ProgressStyle};
 use indoc::formatdoc;
+use mysql::session_state_change::Schema;
 use prettytable::format::consts;
 use prettytable::{color, row, Attr, Cell, Row, Table};
 use rand::Rng;
+use tracing_futures::executor;
 use url::Url;
 
 use crate::lookup::{self, MigrationFiles, VecStr};
 use crate::nom_parser::parse_sql;
 use crate::sequel::{Driver as SequelDriver, VecSerial};
+use crate::states::State;
 
 macro_rules! get_content_string {
     ($content: ident) => {
@@ -31,6 +36,7 @@ macro_rules! get_content_string {
 pub struct Migrator<T: ?Sized> {
     executor: Box<T>,
     migrations: MigrationFiles,
+    live_state: Arc<State>,
 }
 
 fn ensure_migration_state_dir_exists() -> AnyhowResult<()> {
@@ -45,7 +51,9 @@ fn ensure_migration_state_dir_exists() -> AnyhowResult<()> {
 
 impl<T: SequelDriver + 'static + ?Sized> Migrator<T> {
     pub fn new(executor: Box<T>, migrations: MigrationFiles) -> Self {
-        Self { executor, migrations }
+        let database_name = executor.db_name();
+        let live_state = Arc::new(State::new(database_name));
+        Self { executor, migrations, live_state }
     }
 
     pub fn create(&mut self, path: &Path, slug: &str) -> AnyhowResult<()> {
@@ -64,7 +72,7 @@ impl<T: SequelDriver + 'static + ?Sized> Migrator<T> {
             return Ok(());
         }
 
-        println!("\n");
+        println!();
         let mut table = Table::new();
         table.set_titles(row!["Migration No.", "Status"]);
         table.set_format(*consts::FORMAT_NO_LINESEP_WITH_TITLE);
@@ -127,6 +135,8 @@ impl<T: SequelDriver + 'static + ?Sized> Migrator<T> {
             "{spinner:.green} [{prefix:.bold.dim}] {wide_msg:.cyan/blue} ",
         )?);
         let mut rng = rand::thread_rng();
+        let db_name = self.executor.db_name();
+        let migration_state_path = Path::new(".migrations-state").join(format!("{db_name}.sql"));
         for it in &filtered {
             thread::sleep(Duration::from_millis(rng.gen_range(40..300)));
             pb.set_prefix(format!("{it:013}"));
@@ -146,21 +156,19 @@ impl<T: SequelDriver + 'static + ?Sized> Migrator<T> {
                 .content_up
                 .as_ref()
                 .context("Migration content not found")?;
-            let content_up = get_content_string!(content_up);
+            let content_up = Rc::new(get_content_string!(content_up));
+            self.executor.migrate(&content_up)?;
+            self.executor.add_completed_migration(*it)?;
 
-            let content_up_clone = content_up.clone();
-            let table_name = parse_sql(&content_up_clone);
-
+            let table_name = parse_sql(&content_up);
             let tables = table_name
                 .map(|(_, tables)| tables)
                 .unwrap_or(vec![]);
 
             for table in tables {
                 log::info!("Table name: {:#?}", table);
+                self.executor.get_db_table_state(&table)?;
             }
-
-            self.executor.migrate(&content_up)?;
-            self.executor.add_completed_migration(*it)?;
 
             pb.inc(1);
         }
@@ -310,9 +318,8 @@ impl<T: SequelDriver + 'static + ?Sized> Migrator<T> {
 
     pub fn drop(&mut self, db_url: &str) -> AnyhowResult<()> {
         let db_url = Url::parse(db_url).ok();
-        if let Some(db_url) = db_url {
-            let db_name = db_url.path().trim_start_matches('/');
-            self.executor.drop_database(db_name)?;
+        if let Some(_) = db_url {
+            self.executor.drop_database_schemas()?;
         }
         Ok(())
     }

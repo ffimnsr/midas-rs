@@ -1,5 +1,4 @@
-use indoc::{formatdoc, indoc};
-use log::trace;
+use indoc::indoc;
 use mysql::{params, prelude::Queryable, Pool, PooledConn};
 
 use super::{AnyhowResult, Driver as SequelDriver, VecSerial};
@@ -37,17 +36,17 @@ impl SequelDriver for Mysql {
         Ok(())
     }
 
-    fn drop_database(&mut self, db_name: &str) -> AnyhowResult<()> {
-        let payload = formatdoc! {"
-            DROP DATABASE IF EXISTS `{db_name}`;
-            CREATE DATABASE `{db_name}`;
-        ", db_name = db_name};
-        self.conn.exec_drop(payload, ())?;
+    fn drop_database_schemas(&mut self) -> AnyhowResult<()> {
+        // let payload = formatdoc! {"
+        //     DROP DATABASE IF EXISTS `{db_name}`;
+        //     CREATE DATABASE `{db_name}`;
+        // ", db_name = db_name};
+        // self.conn.exec_drop(payload, ())?;
         Ok(())
     }
 
     fn count_migrations(&mut self) -> AnyhowResult<i64> {
-        trace!("Retrieving migrations count");
+        log::trace!("Retrieving migrations count");
         let payload = "SELECT COUNT(*) as count FROM __schema_migrations";
         let row: Option<i64> = self.conn.query_first(payload)?;
         let result = row.unwrap();
@@ -55,7 +54,7 @@ impl SequelDriver for Mysql {
     }
 
     fn get_completed_migrations(&mut self) -> AnyhowResult<VecSerial> {
-        trace!("Retrieving all completed migrations");
+        log::trace!("Retrieving all completed migrations");
         let payload =
             "SELECT migration FROM __schema_migrations ORDER BY id ASC";
         let result: VecSerial = self.conn.query(payload)?;
@@ -63,7 +62,7 @@ impl SequelDriver for Mysql {
     }
 
     fn get_last_completed_migration(&mut self) -> AnyhowResult<i64> {
-        trace!("Checking and retrieving the last migration stored on migrations table");
+        log::trace!("Checking and retrieving the last migration stored on migrations table");
         let payload = "SELECT migration FROM __schema_migrations ORDER BY id DESC LIMIT 1";
         let row: Option<i64> = self.conn.query_first(payload)?;
         let result = row.unwrap();
@@ -74,7 +73,7 @@ impl SequelDriver for Mysql {
         &mut self,
         migration_number: i64,
     ) -> AnyhowResult<()> {
-        trace!("Adding migration to migrations table");
+        log::trace!("Adding migration to migrations table");
         let payload =
             "INSERT INTO __schema_migrations (migration) VALUES (:migration_number)";
         self.conn.exec_drop(
@@ -88,7 +87,7 @@ impl SequelDriver for Mysql {
         &mut self,
         migration_number: i64,
     ) -> AnyhowResult<()> {
-        trace!("Removing a migration in the migrations table");
+        log::trace!("Removing a migration in the migrations table");
         let payload =
             "DELETE FROM __schema_migrations WHERE migration = :migration_number";
         self.conn.exec_drop(
@@ -108,6 +107,10 @@ impl SequelDriver for Mysql {
     fn migrate(&mut self, query: &str) -> AnyhowResult<()> {
         self.conn.query_drop(query)?;
         Ok(())
+    }
+
+    fn get_db_table_state(&mut self, _: &str) -> AnyhowResult<()> {
+        unimplemented!()
     }
 
     fn db_name(&self) -> &str {
