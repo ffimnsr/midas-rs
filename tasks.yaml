@@ -1,0 +1,70 @@
+tasks:
+  install-hooks:
+    commands:
+      - command: git config --local core.hooksPath .githooks
+    description: Install git hooks
+  fmt:
+    commands:
+      - command: cargo fmt --all
+    description: Format the project
+  lint:
+    commands:
+      - command: cargo clippy --all-features --all-targets --tests --benches -- -Dclippy::all
+    description: Lint check the project
+  run-postgres:
+    commands:
+      - command: |
+          podman run -it --rm --name pgsql -p 5432:5432 \
+          -e POSTGRES_PASSWORD=postgres \
+          -e POSTGRES_DB=startup \
+          -d postgres:17-alpine
+    description: Run the postgres container
+  run-mysql:
+    commands:
+      - command: |
+          podman run -it --rm --name mysql -p 3306:3306 \
+          -e MYSQL_ROOT_PASSWORD=mysql \
+          -e MYSQL_DATABASE=startup \
+          -d mysql:9-oracle
+    description: Run the mysql container
+  run-mariadb:
+    commands:
+      - command: |
+          podman run -it --rm --name mariadb -p 3306:3306 \
+          -e MARIADB_ROOT_PASSWORD=mariadb \
+          -e MARIADB_DATABASE=startup \
+          -d mariadb:10
+    description: Run the mariadb container
+  run-mssql:
+    commands:
+      - command: |
+          podman run -it --rm --name mssql -p 1433:1433 \
+          -e ACCEPT_EULA=Y \
+          -e MSSQL_SA_PASSWORD='Strong(!)Password123' \
+          -e MSSQL_PID=Developer \
+          -e MSSQL_DB=startup \
+          -d mcr.microsoft.com/mssql/server:2022-latest
+    description: Run the mssql container
+  pack:
+    preconditions:
+      - command: git diff-index --quiet --exit-code HEAD --
+      - command: cargo c
+    commands:
+      - command: |
+          description=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].description')
+          latest_version=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')
+          name=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].name')
+          podman build \
+            --sbom=true \
+            --label org.opencontainers.image.created=$(date +%Y-%m-%dT%H:%M:%S%z) \
+            --label org.opencontainers.image.authors=gh:@ffimnsr \
+            --label org.opencontainers.image.description="$name - $description" \
+            --label org.opencontainers.image.revision=$(git rev-parse HEAD) \
+            --label org.opencontainers.image.source=$(git remote get-url origin) \
+            --label org.opencontainers.image.title=$name \
+            --label org.opencontainers.image.url=https://github.com/ffimnsr/midas-rs \
+            --label org.opencontainers.image.version=$latest_version \
+            -f Containerfile \
+            -t ghcr.io/ffimnsr/$name-rs:$latest_version \
+            -t ghcr.io/ffimnsr/$name-rs:latest .
+    description: Build the container image

@@ -1,6 +1,13 @@
 -- # Put the your SQL below migration seperator.
 -- !UP
 
+do $$
+begin
+create role e_announcer;
+exception when duplicate_object then raise notice '%, skipping', sqlerrm using errcode = sqlstate;
+end
+$$;
+
 grant connect on database startup to e_announcer;
 grant usage on schema public to e_announcer;
 grant select on table pubsub_job_announcements to e_announcer;

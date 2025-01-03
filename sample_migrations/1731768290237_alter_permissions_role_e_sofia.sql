@@ -1,6 +1,13 @@
 -- # Put the your SQL below migration seperator.
 -- !UP
 
+do $$
+begin
+create role e_sofia;
+exception when duplicate_object then raise notice '%, skipping', sqlerrm using errcode = sqlstate;
+end
+$$;
+
 grant connect on database startup to e_sofia;
 grant usage on schema public to e_sofia;
 grant select on table job_applicant_wishlists to e_sofia;

@@ -113,14 +113,16 @@ drop function if exists get_user_email;
 drop function if exists get_user_role;
 drop function if exists get_user_uid;
 
-drop role if exists anon;
-drop role if exists webuser;
-drop owned by sesame_write_startup_data;
-drop role if exists sesame_write_startup_data;
-drop owned by sesame_read_startup_data;
-drop role if exists sesame_read_startup_data;
-drop owned by sesame_su_startup_data;
-drop role if exists sesame_su_startup_data;
+-- drop owned by anon cascade;
+-- drop role if exists anon;
+-- drop owned by webuser cascade;
+-- drop role if exists webuser;
+-- drop owned by sesame_write_startup_data cascade;
+-- drop role if exists sesame_write_startup_data;
+-- drop owned by sesame_read_startup_data cascade;
+-- drop role if exists sesame_read_startup_data;
+-- drop owned by sesame_su_startup_data cascade;
+-- drop role if exists sesame_su_startup_data;
 
 drop extension pgcrypto;
 drop extension moddatetime;
