@@ -1,10 +1,4 @@
-use std::fs::{
-  self,
-  File,
-};
-use std::io::Write;
 use std::iter::Iterator;
-use std::path::Path;
 use std::thread;
 use std::time::Duration;
 
@@ -13,11 +7,7 @@ use anyhow::{
   Result as AnyhowResult,
 };
 use console::style;
-use indicatif::{
-  ProgressBar,
-  ProgressStyle,
-};
-use indoc::formatdoc;
+use indicatif::ProgressBar;
 use prettytable::format::consts;
 use prettytable::{
   color,
@@ -31,13 +21,16 @@ use rand::Rng;
 use url::Url;
 
 use crate::lookup::{
-  self,
   MigrationFiles,
   VecStr,
 };
 use crate::sequel::{
   Driver as SequelDriver,
   VecSerial,
+};
+use crate::{
+  ensure_migration_state_dir_exists,
+  progress_style,
 };
 
 macro_rules! get_content_string {
@@ -56,32 +49,9 @@ pub struct Migrator<T: ?Sized> {
   migrations: MigrationFiles,
 }
 
-fn ensure_migration_state_dir_exists() -> AnyhowResult<()> {
-  let migration_dir = Path::new(".migrations-state");
-  if !migration_dir.exists() {
-    fs::create_dir_all(migration_dir).context("Failed to create migrations directory")?;
-  }
-
-  Ok(())
-}
-
-fn progress_style() -> AnyhowResult<ProgressStyle> {
-  let style = ProgressStyle::default_bar()
-    .template("{spinner:.green} [{prefix:.bold.dim}] {wide_msg:.cyan/blue} ")?
-    .tick_chars("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏⦿");
-
-  Ok(style)
-}
-
 impl<T: SequelDriver + 'static + ?Sized> Migrator<T> {
   pub fn new(executor: Box<T>, migrations: MigrationFiles) -> Self {
     Self { executor, migrations }
-  }
-
-  pub fn create(&mut self, path: &Path, slug: &str) -> AnyhowResult<()> {
-    let fixed_slug = slug.to_ascii_lowercase().replace(' ', "_");
-    lookup::create_migration_file(path, &fixed_slug)?;
-    Ok(())
   }
 
   pub fn status(&mut self) -> AnyhowResult<()> {
@@ -208,6 +178,7 @@ impl<T: SequelDriver + 'static + ?Sized> Migrator<T> {
     let tick_interval = Duration::from_millis(80);
     pb.set_style(progress_style()?);
     pb.enable_steady_tick(tick_interval);
+
     let mut rng = rand::thread_rng();
     for it in completed_migrations.iter().rev() {
       thread::sleep(Duration::from_millis(rng.gen_range(40..300)));
@@ -329,26 +300,6 @@ impl<T: SequelDriver + 'static + ?Sized> Migrator<T> {
 
     pb.inc(1);
     pb.finish();
-    Ok(())
-  }
-
-  pub fn init(&self, source_path: &Path, source: &str, db_url: &str) -> AnyhowResult<()> {
-    let filename = ".env.midas";
-    let filepath = std::env::current_dir()?.join(filename);
-
-    log::trace!("Creating new env file: {:?}", filepath);
-    let mut f = File::create(filepath)?;
-    let contents = formatdoc! {"
-      DATABASE_URL={}
-      MIGRATIONS_DIR={}
-    ", db_url, source};
-    f.write_all(contents.as_bytes())?;
-    f.sync_all()?;
-
-    log::trace!("Creating new migrations directory: {:?}", source_path);
-    if !source_path.exists() {
-      fs::create_dir_all(source_path)?;
-    }
     Ok(())
   }
 

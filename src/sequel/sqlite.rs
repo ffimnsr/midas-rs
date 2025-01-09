@@ -23,11 +23,11 @@ impl Sqlite {
 impl SequelDriver for Sqlite {
   fn ensure_midas_schema(&mut self) -> AnyhowResult<()> {
     let payload = indoc! {"
-            CREATE TABLE IF NOT EXISTS __schema_migrations (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                migration BIGINT
-            );
-        "};
+      CREATE TABLE IF NOT EXISTS __schema_migrations (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        migration BIGINT
+      );
+    "};
     self.conn.execute(payload, ())?;
     Ok(())
   }

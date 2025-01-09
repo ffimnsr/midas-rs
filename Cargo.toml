@@ -1,6 +1,6 @@
 [package]
 name = "midas"
-version = "0.7.3"
+version = "0.7.4"
 authors = ["Edward Fitz Abucay <gh:@ffimnsr>"]
 edition = "2021"
 readme = "README.md"
@@ -39,13 +39,14 @@ log = "0.4"
 url = "2.5"
 indoc = "2"
 openssl = { version = "0.10", features = ["vendored"] }
-prettytable-rs = "0.10.0"
 anyhow = "1.0.93"
 indicatif = "0.17.9"
 serde = { version = "1.0.215", features = ["derive"] }
-serde_yaml = "0.9.34"
 rand = "0.8.5"
 console = "0.15.10"
+clap_complete = "4.5.41"
+mk_ext_prettytable = { version = "0.11.0", default-features = false, features = ["win_crlf"] }
+mk_ext_serde_yaml = { version = "0.10.0" }
 
 [dev-dependencies]
 tempfile = "3.12"

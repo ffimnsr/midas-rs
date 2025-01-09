@@ -32,12 +32,12 @@ impl Mysql {
 impl SequelDriver for Mysql {
   fn ensure_midas_schema(&mut self) -> AnyhowResult<()> {
     let payload = indoc! {"
-            CREATE TABLE IF NOT EXISTS __schema_migrations (
-                id INT NOT NULL AUTO_INCREMENT,
-                migration BIGINT,
-                PRIMARY KEY (id)
-            ) AUTO_INCREMENT = 100;
-        "};
+      CREATE TABLE IF NOT EXISTS __schema_migrations (
+        id INT NOT NULL AUTO_INCREMENT,
+        migration BIGINT,
+        PRIMARY KEY (id)
+      ) AUTO_INCREMENT = 100;
+    "};
     self.conn.query_drop(payload)?;
     Ok(())
   }
@@ -50,9 +50,9 @@ impl SequelDriver for Mysql {
 
   fn drop_database(&mut self, db_name: &str) -> AnyhowResult<()> {
     let payload = formatdoc! {"
-            DROP DATABASE IF EXISTS `{db_name}`;
-            CREATE DATABASE `{db_name}`;
-        ", db_name = db_name};
+      DROP DATABASE IF EXISTS `{db_name}`;
+      CREATE DATABASE `{db_name}`;
+    ", db_name = db_name};
     self.conn.exec_drop(payload, ())?;
     Ok(())
   }
