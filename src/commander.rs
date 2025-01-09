@@ -65,6 +65,14 @@ fn ensure_migration_state_dir_exists() -> AnyhowResult<()> {
   Ok(())
 }
 
+fn progress_style() -> AnyhowResult<ProgressStyle> {
+  let style = ProgressStyle::default_bar()
+    .template("{spinner:.green} [{prefix:.bold.dim}] {wide_msg:.cyan/blue} ")?
+    .tick_chars("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏⦿");
+
+  Ok(style)
+}
+
 impl<T: SequelDriver + 'static + ?Sized> Migrator<T> {
   pub fn new(executor: Box<T>, migrations: MigrationFiles) -> Self {
     Self { executor, migrations }
@@ -156,10 +164,7 @@ impl<T: SequelDriver + 'static + ?Sized> Migrator<T> {
 
     let pb = ProgressBar::new(filtered.len() as u64);
     let tick_interval = Duration::from_millis(80);
-    pb.set_style(
-      ProgressStyle::with_template("{spinner:.green} [{prefix:.bold.dim}] {wide_msg:.cyan/blue} ")?
-        .tick_chars("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏⦿"),
-    );
+    pb.set_style(progress_style()?);
     pb.enable_steady_tick(tick_interval);
     let mut rng = rand::thread_rng();
     for it in &filtered {
@@ -201,10 +206,7 @@ impl<T: SequelDriver + 'static + ?Sized> Migrator<T> {
 
     let pb = ProgressBar::new(completed_migrations.len() as u64);
     let tick_interval = Duration::from_millis(80);
-    pb.set_style(
-      ProgressStyle::with_template("{spinner:.green} [{prefix:.bold.dim}] {wide_msg:.cyan/blue} ")?
-        .tick_chars("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏⦿"),
-    );
+    pb.set_style(progress_style()?);
     pb.enable_steady_tick(tick_interval);
     let mut rng = rand::thread_rng();
     for it in completed_migrations.iter().rev() {
@@ -253,10 +255,7 @@ impl<T: SequelDriver + 'static + ?Sized> Migrator<T> {
 
     let pb = ProgressBar::new(1u64);
     let tick_interval = Duration::from_millis(80);
-    pb.set_style(
-      ProgressStyle::with_template("{spinner:.green} [{prefix:.bold.dim}] {wide_msg:.cyan/blue} ")?
-        .tick_chars("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏⦿"),
-    );
+    pb.set_style(progress_style()?);
     pb.enable_steady_tick(tick_interval);
     pb.set_prefix(format!("{current:013}"));
     pb.tick();
@@ -311,10 +310,7 @@ impl<T: SequelDriver + 'static + ?Sized> Migrator<T> {
 
     let pb = ProgressBar::new(1u64);
     let tick_interval = Duration::from_millis(80);
-    pb.set_style(
-      ProgressStyle::with_template("{spinner:.green} [{prefix:.bold.dim}] {wide_msg:.cyan/blue} ")?
-        .tick_chars("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏⦿"),
-    );
+    pb.set_style(progress_style()?);
     pb.enable_steady_tick(tick_interval);
     pb.set_prefix(format!("{current:013}"));
     pb.tick();
@@ -344,13 +340,15 @@ impl<T: SequelDriver + 'static + ?Sized> Migrator<T> {
     let mut f = File::create(filepath)?;
     let contents = formatdoc! {"
       DATABASE_URL={}
-      MIGRATIONS_ROOT={}
+      MIGRATIONS_DIR={}
     ", db_url, source};
     f.write_all(contents.as_bytes())?;
     f.sync_all()?;
 
     log::trace!("Creating new migrations directory: {:?}", source_path);
-    fs::create_dir_all(source_path)?;
+    if !source_path.exists() {
+      fs::create_dir_all(source_path)?;
+    }
     Ok(())
   }
 

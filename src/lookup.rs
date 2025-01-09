@@ -6,12 +6,13 @@ use indoc::indoc;
 use regex::Regex;
 use std::collections::BTreeMap;
 use std::fs::{
-  read_dir,
+  self,
   File,
 };
 use std::io::prelude::*;
 use std::io::BufReader;
 use std::path::Path;
+use std::string::ToString;
 use std::time::{
   SystemTime,
   UNIX_EPOCH,
@@ -59,9 +60,9 @@ fn parse_file(filename: &str) -> AnyhowResult<MigrationFile> {
 
 pub fn build_migration_list(path: &Path) -> AnyhowResult<MigrationFiles> {
   let mut files: MigrationFiles = BTreeMap::new();
+  let entries = fs::read_dir(path)?.filter_map(Result::ok).collect::<Vec<_>>();
 
-  for entry in read_dir(path)? {
-    let entry = entry?;
+  for entry in entries {
     let filename = entry.file_name();
     let Ok(info) = parse_file(filename.to_str().context("Filename is not valid")?) else {
       continue;
@@ -72,10 +73,7 @@ pub fn build_migration_list(path: &Path) -> AnyhowResult<MigrationFiles> {
     let mut content = String::new();
     buf_reader.read_to_string(&mut content)?;
 
-    let split_vec: Vec<String> = content
-      .split('\n')
-      .map(std::string::ToString::to_string)
-      .collect();
+    let split_vec: Vec<String> = content.split('\n').map(ToString::to_string).collect();
 
     let pos_up = split_vec
       .iter()
@@ -109,6 +107,7 @@ fn timestamp() -> String {
   since_the_epoch.as_millis().to_string()
 }
 
+// Create a new migration file
 pub fn create_migration_file(path: &Path, slug: &str) -> AnyhowResult<()> {
   let filename = timestamp() + "_" + slug + ".sql";
   let filepath = path.join(filename);
@@ -116,7 +115,7 @@ pub fn create_migration_file(path: &Path, slug: &str) -> AnyhowResult<()> {
   log::trace!("Creating new migration file: {:?}", filepath);
   let mut f = File::create(filepath)?;
   let contents = indoc! {"\
-    -- # Put the your SQL below migration seperator.
+    -- # Put your SQL below migration seperator.
     -- !UP
 
     -- !DOWN

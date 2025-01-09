@@ -19,6 +19,7 @@ use midas_core::sequel::mysql::Mysql;
 use midas_core::sequel::postgres::Postgres;
 use midas_core::sequel::sqlite::Sqlite;
 use midas_core::sequel::Driver as SequelDriver;
+use tracing_subscriber::EnvFilter;
 
 pub(crate) fn midas_entry(command_name: &str, sub_command: bool) -> AnyhowResult<()> {
   dotenv::dotenv()
@@ -30,12 +31,12 @@ pub(crate) fn midas_entry(command_name: &str, sub_command: bool) -> AnyhowResult
   }
 
   tracing_subscriber::fmt()
-    .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+    .with_env_filter(EnvFilter::from_default_env())
     .init();
 
   let cname = command_name.to_owned();
   let mut cli_app = if sub_command {
-    Command::new(cname.clone())
+    Command::new(cname)
   } else {
     Command::new(cname.clone()).bin_name(cname)
   };
@@ -50,6 +51,10 @@ pub(crate) fn midas_entry(command_name: &str, sub_command: bool) -> AnyhowResult
       Arg::new("database")
         .short('d')
         .long("database")
+        .env("DATABASE_URL")
+        .env("DATABASE_URI")
+        .env("DB_URL")
+        .env("DSN")
         .value_name("URL")
         .help("Sets the database connection url")
         .num_args(1),
@@ -58,6 +63,9 @@ pub(crate) fn midas_entry(command_name: &str, sub_command: bool) -> AnyhowResult
       Arg::new("source")
         .short('s')
         .long("source")
+        .env("MIGRATIONS_ROOT")
+        .env("MIGRATIONS_PATH")
+        .env("MIGRATIONS_DIR")
         .value_name("DIR")
         .help("Sets the migration store directory")
         .num_args(1),
@@ -68,7 +76,19 @@ pub(crate) fn midas_entry(command_name: &str, sub_command: bool) -> AnyhowResult
         .arg(Arg::new("name").help("The migration action name").required(true)),
     )
     .subcommand(Command::new("status").about("Checks the status of the migration"))
-    .subcommand(Command::new("up").about("Apply all non-applied migrations"))
+    .subcommand(Command::new("up").about("Apply all pending migrations"))
+    .subcommand(
+      Command::new("upto")
+        .about("Apply all migrations up to the given migration number")
+        .arg(
+          Arg::new("migration_number")
+            .value_name("N")
+            .help("The migration number to apply up to")
+            .num_args(1)
+            .value_parser(clap::value_parser!(usize))
+            .required(true),
+        ),
+    )
     .subcommand(Command::new("down").about("Remove all applied migrations"))
     .subcommand(Command::new("redo").about("Redo the last migration"))
     .subcommand(
@@ -83,11 +103,12 @@ pub(crate) fn midas_entry(command_name: &str, sub_command: bool) -> AnyhowResult
             .default_value("1"),
         ),
     )
-    .subcommand(Command::new("init").about("Setups and creates initial file directory and env"))
+    .subcommand(Command::new("init").about("Setup and creates initial migration directory and a dotenv file"))
     .subcommand(
       Command::new("drop")
         .about("Drops everything inside the database (NOTE: must have create/drop privilege)"),
-    );
+    )
+    .subcommand(Command::new("completion").about("Generates shell completion scripts"));
 
   let matches = if sub_command {
     let internal_matches = Command::new("cargo")
@@ -103,29 +124,14 @@ pub(crate) fn midas_entry(command_name: &str, sub_command: bool) -> AnyhowResult
     cli_app.get_matches()
   };
 
-  // Read the database connection url from the environment variables
-  // From the following possible sources:
-  // 1. DATABASE_URL
-  // 2. DB_URL
-  // 3. DSN
-  let env_db_url_1 = env::var("DATABASE_URL").ok();
-  let env_db_url_2 = env::var("DB_URL").ok();
-  let env_db_url_3 = env::var("DSN").ok();
   let db_url = matches
     .get_one::<String>("database")
-    .or(env_db_url_1.as_ref())
-    .or(env_db_url_2.as_ref())
-    .or(env_db_url_3.as_ref())
     .context("No database connection url was provided")?;
 
   log::trace!("Using DSN: {}", db_url);
   let default_source_path = Some("migrations".to_string());
-  let env_source_path_1 = env::var("MIGRATIONS_ROOT").ok();
-  let env_source_path_2 = env::var("MIGRATIONS_DIR").ok();
   let source = matches
     .get_one::<String>("source")
-    .or(env_source_path_1.as_ref())
-    .or(env_source_path_2.as_ref())
     .or(default_source_path.as_ref())
     .context("No migration source path was provided")?;
 
@@ -149,6 +155,15 @@ pub(crate) fn midas_entry(command_name: &str, sub_command: bool) -> AnyhowResult
     },
     Some("status") => migrator.status()?,
     Some("up") => migrator.up()?,
+    Some("upto") => {
+      let _value = matches
+        .subcommand_matches("upto")
+        .context("No subcommand migration number was detected")?
+        .get_one::<usize>("migration_number")
+        .context("Migration number was invalid")?;
+
+      unimplemented!();
+    },
     Some("down") => migrator.down()?,
     Some("redo") => migrator.redo()?,
     Some("revert") => {
