@@ -119,13 +119,27 @@ pub fn midas_entry(command_name: &str, is_subcommand: bool) -> AnyhowResult<()> 
       migrator.up()?
     },
     Some("upto") => {
-      let _value = matches
+      let value = matches
         .subcommand_matches("upto")
         .context("No subcommand migration number was detected")?
-        .get_one::<usize>("migration_number")
+        .get_one::<i64>("migration_number")
         .context("Migration number was invalid")?;
+      let migration_number = *value;
 
-      unimplemented!();
+      if migration_number < 0 {
+        return Err(anyhow::anyhow!("Migration number must be greater than 0"));
+      }
+
+      if !migrations.contains_key(&migration_number) {
+        return Err(anyhow::anyhow!(
+          "Migration number {} does not exist",
+          migration_number
+        ));
+      }
+
+      let executor = get_executor(db_url);
+      let mut migrator = executor.map(|executor| Migrator::new(executor, migrations))?;
+      migrator.upto(migration_number)?
     },
     Some("down") => {
       let executor = get_executor(db_url);
@@ -155,6 +169,9 @@ pub fn midas_entry(command_name: &str, is_subcommand: bool) -> AnyhowResult<()> 
       let executor = get_executor(db_url);
       let mut migrator = executor.map(|executor| Migrator::new(executor, migrations))?;
       migrator.drop(db_url)?
+    },
+    Some("update") => {
+      unimplemented!();
     },
     Some("completion") => {
       let shell = matches
@@ -276,6 +293,7 @@ fn build_cli(command_name: &str, is_subcommand: bool) -> Command {
         .visible_alias("f")
         .about("Generate fake data for the database or tables"),
     )
+    .subcommand(Command::new("update").about("Update the midas binary to the latest version"))
     .subcommand(
       Command::new("completion")
         .visible_alias("comp")

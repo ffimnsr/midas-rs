@@ -165,6 +165,62 @@ impl<T: SequelDriver + 'static + ?Sized> Migrator<T> {
     Ok(())
   }
 
+  pub fn upto(&mut self, migration_number: i64) -> AnyhowResult<()> {
+    ensure_migration_state_dir_exists()?;
+
+    let completed_migrations = self.executor.get_completed_migrations()?;
+    let available_migrations = self.migrations.keys().copied().collect::<VecSerial>();
+
+    if available_migrations.is_empty() {
+      println!("There are no available migration files.");
+      return Ok(());
+    }
+
+    let filtered: Vec<_> = available_migrations
+      .iter()
+      .filter(|s| !completed_migrations.contains(s))
+      .filter(|s| **s <= migration_number)
+      .copied()
+      .collect();
+
+    if filtered.is_empty() {
+      println!("Migrations are all up-to-date.");
+      return Ok(());
+    }
+
+    let pb = ProgressBar::new(filtered.len() as u64);
+    let tick_interval = Duration::from_millis(80);
+    pb.set_style(progress_style()?);
+    pb.enable_steady_tick(tick_interval);
+    let mut rng = rand::thread_rng();
+    for it in &filtered {
+      thread::sleep(Duration::from_millis(rng.gen_range(40..300)));
+      pb.set_prefix(format!("{it:013}"));
+
+      let migration = self.migrations.get(it).context("Migration file not found")?;
+      let filename_parts: Vec<&str> = migration.filename.splitn(2, '_').collect();
+      let migration_name = filename_parts
+        .get(1)
+        .and_then(|s| s.strip_suffix(".sql"))
+        .context("Migration name not found")?;
+
+      pb.set_message(format!("Applying migration: {migration_name}"));
+
+      let content_up = migration
+        .content_up
+        .as_ref()
+        .context("Migration content not found")?;
+      let content_up = get_content_string!(content_up);
+
+      self.executor.migrate(&content_up, *it)?;
+      self.executor.add_completed_migration(*it)?;
+      pb.inc(1);
+    }
+    pb.finish();
+
+    Ok(())
+  }
+
   pub fn down(&mut self) -> AnyhowResult<()> {
     ensure_migration_state_dir_exists()?;
 
