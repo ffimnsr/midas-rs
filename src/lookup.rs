@@ -42,13 +42,17 @@ impl MigrationFile {
 /// A map of migration files
 pub type MigrationFiles = BTreeMap<i64, MigrationFile>;
 
+/// Parse the migration file
 fn parse_file(filename: &str) -> AnyhowResult<MigrationFile> {
+  // Regex to parse the migration file
   let re = Regex::new(r"^(?P<number>[0-9]{13})_(?P<name>[_0-9a-zA-Z]*)\.sql$")?;
 
+  // Parse the filename
   let result = re
     .captures(filename)
     .with_context(|| format!("Invalid filename found on {filename}"))?;
 
+  // Extract the number
   let number = result
     .name("number")
     .context("The migration file timestamp is missing")?
@@ -58,6 +62,7 @@ fn parse_file(filename: &str) -> AnyhowResult<MigrationFile> {
   Ok(MigrationFile::new(filename, number))
 }
 
+/// Build the migration list
 pub fn build_migration_list(path: &Path) -> AnyhowResult<MigrationFiles> {
   let mut files: MigrationFiles = BTreeMap::new();
   let entries = fs::read_dir(path)?.filter_map(Result::ok).collect::<Vec<_>>();
@@ -132,7 +137,7 @@ mod tests {
   use super::*;
 
   #[test]
-  fn test_parse_file() {
+  fn it_should_parse_correct_migration_filename() {
     let result = parse_file("0000000000000_initial.sql").unwrap();
     assert_eq!(result.number, 0);
     assert_eq!(result.filename, "0000000000000_initial.sql");

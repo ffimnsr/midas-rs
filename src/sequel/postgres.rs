@@ -17,16 +17,22 @@ use super::{
   VecSerial,
 };
 
+/// The Postgres struct definition
 pub struct Postgres {
+  /// The Postgres client
   client: Client,
+  /// The database name
   database_name: String,
 }
 
+/// Implement the Postgres struct
 impl Postgres {
+  /// Create a new instance of Postgres
   pub fn new(database_url: &str) -> AnyhowResult<Self> {
     Self::new_tls(database_url, NoTls)
   }
 
+  /// Create a new instance of Postgres with TLS
   pub fn new_tls<T>(database_url: &str, tls_mode: T) -> AnyhowResult<Self>
   where
     T: MakeTlsConnect<Socket> + 'static + Send,
@@ -34,18 +40,23 @@ impl Postgres {
     T::Stream: Send,
     <T::TlsConnect as TlsConnect<Socket>>::Future: Send,
   {
+    // Get the database name from the URL
     let url = Url::parse(database_url)?;
     let database_name = url
       .path_segments()
       .and_then(|s| s.last())
       .context("Database name not found")?;
 
+    // Open the connection
     let client = Client::connect(url.as_str(), tls_mode)?;
 
+    // Create a new instance of Postgres
     let mut db = Postgres {
       client,
       database_name: database_name.into(),
     };
+
+    // Ensure the midas schema
     db.ensure_midas_schema()?;
     Ok(db)
   }

@@ -41,7 +41,7 @@ midas --database 'postgres://postgres:postgres@localhost:5432/startup' --source 
 midas --database 'mysql://root:mysql@localhost:3306/startup' --source migrations up
 
 # SQLite
-midas --database 'file:///./data.db' --source migrations up
+midas --database './data.db3' --source migrations up
 ```
 
 or you could also use the `cargo migrate` to integrate it on your cargo workflow.
@@ -151,7 +151,6 @@ Follow the instruction below to install and use `midas` on your system.
 ## What's in the Roadmap
 
 - [ ] TOML DSL for creating database objects
-- [ ] Setup multiple drivers (e.g. MySQL, Sqlite3, etc.)
 - [ ] Add functionality for `setup` and `faker` commands.
 
 ## License

@@ -1,6 +1,5 @@
 use anyhow::Result as AnyhowResult;
 
-pub mod error;
 pub mod mysql;
 pub mod postgres;
 pub mod sqlite;

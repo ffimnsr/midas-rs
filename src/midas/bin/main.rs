@@ -1,3 +1,6 @@
+//! # Midas
+//! The main entry point for the migration command
+
 mod cli;
 
 use anyhow::Result as AnyhowResult;
