@@ -44,7 +44,7 @@ impl Postgres {
     let url = Url::parse(database_url)?;
     let database_name = url
       .path_segments()
-      .and_then(|s| s.last())
+      .and_then(|mut s| s.next_back())
       .context("Database name not found")?;
 
     // Open the connection

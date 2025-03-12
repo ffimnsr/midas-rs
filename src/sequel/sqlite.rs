@@ -25,10 +25,6 @@ impl Sqlite {
   /// * `file_url` - The file URL of the SQLite database
   /// # Returns
   /// * An instance of Sqlite
-  /// # Example
-  /// ```
-  /// let db = Sqlite::new("sqlite://./db.sqlite");
-  /// ```
   pub fn new(file_url: &str) -> AnyhowResult<Self> {
     log::trace!("Opening SQLite database connection: {file_url}");
 
