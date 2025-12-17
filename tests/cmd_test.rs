@@ -1,4 +1,4 @@
-use assert_cmd::Command;
+use assert_cmd::{cargo, Command};
 use assert_fs::prelude::PathChild as _;
 use assert_fs::TempDir;
 
@@ -9,7 +9,7 @@ fn test_sanity() {
 
 #[test]
 fn it_should_show_help() -> anyhow::Result<()> {
-  let mut cmd = Command::cargo_bin("midas")?;
+  let mut cmd = Command::new(cargo::cargo_bin!("midas"));
   let assert = cmd.arg("--help").assert();
   assert
     .success()
@@ -40,7 +40,7 @@ fn it_should_show_help() -> anyhow::Result<()> {
 
 #[test]
 fn it_should_show_version() -> anyhow::Result<()> {
-  let mut cmd = Command::cargo_bin("midas")?;
+  let mut cmd = Command::new(cargo::cargo_bin!("midas"));
   let assert = cmd.arg("--version").assert();
   assert
     .success()
@@ -51,7 +51,7 @@ fn it_should_show_version() -> anyhow::Result<()> {
 
 #[test]
 fn it_should_show_init_help() -> anyhow::Result<()> {
-  let mut cmd = Command::cargo_bin("midas")?;
+  let mut cmd = Command::new(cargo::cargo_bin!("midas"));
   let assert = cmd.arg("init").arg("--help").assert();
   assert
     .success()
@@ -68,7 +68,7 @@ fn it_should_show_init_help() -> anyhow::Result<()> {
 #[test]
 fn it_should_create_files_on_init() -> anyhow::Result<()> {
   let temp_dir = TempDir::new()?;
-  let mut cmd = Command::cargo_bin("midas")?;
+  let mut cmd = Command::new(cargo::cargo_bin!("midas"));
   let assert = cmd.arg("init").current_dir(temp_dir.path()).assert();
   assert.success();
 
@@ -86,7 +86,7 @@ fn it_should_create_files_on_init() -> anyhow::Result<()> {
 #[test]
 fn it_should_create_files_on_create() -> anyhow::Result<()> {
   let temp_dir = TempDir::new()?;
-  let mut cmd = Command::cargo_bin("midas")?;
+  let mut cmd = Command::new(cargo::cargo_bin!("midas"));
   let assert = cmd
     .arg("create")
     .arg("create_users_table")
@@ -116,7 +116,7 @@ fn it_should_create_files_on_create() -> anyhow::Result<()> {
 #[test]
 fn it_should_create_files_on_create_with_arg_with_space() -> anyhow::Result<()> {
   let temp_dir = TempDir::new()?;
-  let mut cmd = Command::cargo_bin("midas")?;
+  let mut cmd = Command::new(cargo::cargo_bin!("midas"));
   let assert = cmd
     .arg("create")
     .arg("Create users table with space")
