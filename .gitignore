@@ -4,3 +4,9 @@
 .env
 .env.midas
 .migration-state
+*.md
+!/CODE_OF_CONDUCT.md
+!/CONTRIBUTING.md
+!/README.md
+!/ISSUES.md
+!/docs/*.md
