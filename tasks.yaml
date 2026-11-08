@@ -51,9 +51,10 @@ tasks:
       - command: cargo c
     commands:
       - command: |
-          description=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].description')
-          latest_version=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')
-          name=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].name')
+          package=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "midas")')
+          description=$(echo "$package" | jq -r '.description')
+          latest_version=$(echo "$package" | jq -r '.version')
+          name=$(echo "$package" | jq -r '.name')
           podman build \
             --sbom=true \
             --label org.opencontainers.image.created=$(date +%Y-%m-%dT%H:%M:%S%z) \

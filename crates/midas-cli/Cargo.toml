@@ -1,0 +1,69 @@
+[package]
+name = "midas-cli"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
+categories.workspace = true
+keywords.workspace = true
+description = "Do painless migration 🦀"
+readme = "../../README.md"
+default-run = "midas"
+
+[features]
+default = ["cli", "postgres", "mysql", "sqlite"]
+# Marker feature used by `required-features`; any driver enables it.
+cli = []
+postgres = ["cli", "midas/postgres"]
+mysql = ["cli", "midas/mysql"]
+sqlite = ["cli", "midas/sqlite"]
+macros = ["midas/macros"]
+tls-native-tls = ["midas/tls-native-tls"]
+tls-rustls = ["midas/tls-rustls"]
+openssl-vendored = ["midas/openssl-vendored"]
+
+[[bin]]
+name = "midas"
+path = "src/bin/midas.rs"
+required-features = ["cli"]
+
+[[bin]]
+name = "cargo-migrate"
+path = "src/bin/cargo-migrate.rs"
+required-features = ["cli"]
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+clap_complete.workspace = true
+console.workspace = true
+dotenvy.workspace = true
+indoc.workspace = true
+midas = { path = "../midas", default-features = false }
+mk_ext_prettytable.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+url.workspace = true
+
+[dev-dependencies]
+assert_cmd.workspace = true
+assert_fs.workspace = true
+predicates.workspace = true
+snapbox.workspace = true
+trycmd.workspace = true
+
+[package.metadata.deb]
+name = "midas"
+maintainer = "Edward Fitz Abucay gh:@ffimnsr"
+section = "utility"
+assets = [
+  ["target/release/midas", "usr/bin/", "755"],
+  ["target/release/cargo-migrate", "usr/bin/", "755"],
+  ["COPYRIGHT", "usr/share/doc/midas/", "644"],
+  ["LICENSE-MIT", "usr/share/doc/midas/", "644"],
+  ["LICENSE-APACHE", "usr/share/doc/midas/", "644"],
+  ["README.md", "usr/share/doc/midas/README", "644"],
+]

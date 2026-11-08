@@ -1,70 +1,49 @@
-[package]
-name = "midas"
+[workspace]
+resolver = "2"
+members = ["crates/midas", "crates/midas-cli", "crates/midas-macros"]
+
+[workspace.package]
 version = "0.7.6"
 authors = ["Edward Fitz Abucay <gh:@ffimnsr>"]
 edition = "2021"
-readme = "README.md"
-description = "Do painless migration 🦀"
-categories = ["command-line-utilities", "development-tools"]
+rust-version = "1.86"
 homepage = "https://github.com/ffimnsr/midas"
 repository = "https://github.com/ffimnsr/midas"
 license = "MIT OR Apache-2.0"
+categories = ["command-line-utilities", "development-tools"]
 keywords = ["sql", "database", "command-line", "migrate", "cli"]
-exclude = [".gitignore"]
-default-run = "midas"
 
-[lib]
-name = "midas_core"
-path = "src/lib.rs"
-
-[[bin]]
-name = "midas"
-path = "src/midas/bin/main.rs"
-
-[[bin]]
-name = "cargo-migrate"
-path = "src/midas/bin/migrate_main.rs"
-
-[dependencies]
-clap = { version = "4.5", features = ["env", "string"] }
-postgres = "0.19"
-mysql = "25.0"
-rusqlite = { version = "0.32", features = ["bundled"] }
-regex = "1.10"
-dotenv = "0.15"
-tracing = "0.1"
-tracing-subscriber = { version = "0.2", features = ["tracing-log"] }
-tracing-attributes = "0.1"
-tracing-futures = "0.2"
-log = "0.4"
-url = "2.5"
-indoc = "2"
-openssl = { version = "0.10", features = ["vendored"] }
+[workspace.dependencies]
 anyhow = "1.0.93"
-indicatif = "0.17.9"
-serde = { version = "1.0.215", features = ["derive"] }
-rand = "0.8.5"
-console = "0.15.10"
-clap_complete = "4.5.41"
-mk_ext_prettytable = { version = "0.11.0", default-features = false, features = ["win_crlf"] }
-mk_ext_serde_yaml = { version = "0.10.0" }
-
-[dev-dependencies]
 assert_cmd = "2.1.1"
 assert_fs = "1.1.2"
+clap = { version = "4.5", features = ["env", "string"] }
+clap_complete = "4.5.41"
+console = "0.15.10"
+crc = "3.2"
+dotenvy = "0.15"
+indicatif = "0.17.9"
+indoc = "2"
+mk_ext_prettytable = { version = "0.11.0", default-features = false, features = ["win_crlf"] }
+midas = { path = "crates/midas" }
+midas-macros = { path = "crates/midas-macros" }
+mysql = { version = "25.0", default-features = false, features = ["minimal-rust"] }
+native-tls = "0.2"
+postgres = "0.19"
+postgres-native-tls = "0.5.3"
+postgres-rustls = { package = "postgres_rustls", version = "=0.1.4" }
 predicates = { version = "3.1.3", default-features = false, features = ["diff", "regex"] }
+regex = "1.10"
+rusqlite = { version = "0.32", features = ["bundled"] }
+serde = { version = "1.0.215", features = ["derive"] }
+sha2 = "0.10"
 snapbox = "0.6.21"
+tempfile = "3.15"
+testcontainers = { version = "0.23", features = ["blocking"] }
+testcontainers-modules = { version = "0.11", default-features = false, features = ["postgres", "mysql"] }
+thiserror = "1.0.69"
+toml = "0.8"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "tracing-log"] }
 trycmd = "0.15.8"
-
-[package.metadata.deb]
-name = "midas"
-maintainer = "Edward Fitz Abucay gh:@ffimnsr"
-section = "utility"
-assets = [
-  ["target/release/midas", "usr/bin/", "755"],
-  ["target/release/cargo-migrate", "usr/bin/", "755"],
-  ["COPYRIGHT", "usr/share/doc/midas/", "644"],
-  ["LICENSE-MIT", "usr/share/doc/midas/", "644"],
-  ["LICENSE-APACHE", "usr/share/doc/midas/", "644"],
-  ["README.md", "usr/share/doc/midas/README", "644"],
-]
+url = "2.5"

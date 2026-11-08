@@ -1,0 +1,68 @@
+//! # Midas
+//!
+//! Migration library with pluggable database backends. The [`commander`]
+//! module coordinates migration files with a [`sequel::Backend`], while
+//! [`config`] and [`error`] define the shared contracts used by every phase.
+//!
+//! Driver modules are compiled only when their feature is enabled. The
+//! following doctests prove the module is absent otherwise.
+#![cfg_attr(
+  not(feature = "postgres"),
+  doc = "```compile_fail\nuse midas::sequel::postgres;\n```"
+)]
+#![cfg_attr(
+  not(feature = "mysql"),
+  doc = "```compile_fail\nuse midas::sequel::mysql;\n```"
+)]
+#![cfg_attr(
+  not(feature = "sqlite"),
+  doc = "```compile_fail\nuse midas::sequel::sqlite;\n```"
+)]
+
+pub mod commander;
+pub mod config;
+pub mod error;
+pub mod lookup;
+pub mod migration;
+pub mod sequel;
+
+// Allows the `migrate!` placeholder to expand to `::midas::...` paths even
+// inside this crate.
+extern crate self as midas;
+
+pub use error::{
+  Error,
+  Result,
+};
+
+#[cfg(feature = "macros")]
+pub use midas_macros::migrate;
+
+use indicatif::ProgressStyle;
+
+/// Build the shared progress-bar style.
+pub fn progress_style() -> Result<ProgressStyle> {
+  let style = ProgressStyle::default_bar()
+    .template("{spinner:.green} [{prefix:.bold.dim}] {wide_msg:.cyan/blue} ")
+    .map_err(|error| Error::migration(format!("invalid progress template: {error}")))?
+    .tick_chars("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏⦿");
+
+  Ok(style)
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn progress_style_builds() {
+    assert!(progress_style().is_ok());
+  }
+
+  #[cfg(feature = "macros")]
+  #[test]
+  fn migrate_macro_expands_to_empty_vec() {
+    let migrations: Vec<crate::migration::Migration> = crate::migrate!();
+    assert!(migrations.is_empty());
+  }
+}

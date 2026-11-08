@@ -21,13 +21,69 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Install packages
+        run: ci/ubuntu-install-packages
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: stable
-          components: rustc-dev
       - name: Run cargo check tool
-        run: cargo check --all-targets --all-features --tests --benches --release --verbose
+        run: cargo check --workspace --all-targets --all-features --verbose
+      - name: Verify workspace package inventory
+        run: |
+          python3 - <<'PY'
+          import json, subprocess
+          meta = json.loads(subprocess.check_output(["cargo", "metadata", "--no-deps", "--format-version", "1"]))
+          names = sorted(package["name"] for package in meta["packages"])
+          expected = ["midas", "midas-cli", "midas-macros"]
+          if names != expected:
+              raise SystemExit(f"unexpected workspace packages: {names} != {expected}")
+          PY
+      - name: Library sources must not use anyhow::Result
+        run: |
+          if grep -rn "anyhow::Result" crates/midas/src; then
+            echo "crates/midas must not expose anyhow::Result" >&2
+            exit 1
+          fi
+  feature-matrix:
+    runs-on: ubuntu-latest
+    needs:
+      - check-pass
+    strategy:
+      fail-fast: false
+      matrix:
+        features:
+          - ""
+          - "--no-default-features"
+          - "--no-default-features --features postgres"
+          - "--no-default-features --features mysql"
+          - "--no-default-features --features sqlite"
+          - "--all-features"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install packages
+        run: ci/ubuntu-install-packages
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+      - name: Check feature set
+        run: cargo check --workspace --all-targets ${{ matrix.features }} --verbose
+      - name: Verify disabled driver modules are absent
+        if: matrix.features == '--no-default-features'
+        run: cargo test -p midas --no-default-features --doc --quiet
+  msrv:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install packages
+        run: ci/ubuntu-install-packages
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.86.0"
+      - name: Check MSRV
+        run: cargo check --workspace --all-targets --all-features --verbose
   test:
     runs-on: ${{ matrix.os }}
     needs:
@@ -100,7 +156,7 @@ jobs:
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.rust }}
-          components: llvm-tools, rustc-dev
+          components: llvm-tools
       - name: Use cross compiler
         if: matrix.os == 'ubuntu-latest' && matrix.target != ''
         run: |
@@ -130,14 +186,52 @@ jobs:
         run: ${{ env.CARGO }} build --verbose ${{ env.TARGET_FLAGS }}
       - name: Run tests (native)
         if: matrix.target == ''
-        run: ${{ env.CARGO }} test --verbose ${{ env.TARGET_FLAGS }}
+        run: ${{ env.CARGO }} test --workspace --all-features --quiet ${{ env.TARGET_FLAGS }}
       - name: Run tests (cross)
         if: matrix.target != 'x86_64-pc-windows-gnu'
-        run: ${{ env.CARGO }} test --verbose ${{ env.TARGET_FLAGS }}
+        run: ${{ env.CARGO }} test --workspace --all-features --quiet ${{ env.TARGET_FLAGS }}
       - name: Run tests (win-gnu)
         if: matrix.target == 'x86_64-pc-windows-gnu'
         shell: msys2 {0}
-        run: ${{ env.CARGO }} test --verbose ${{ env.TARGET_FLAGS }}
+        run: ${{ env.CARGO }} test --workspace --all-features --quiet ${{ env.TARGET_FLAGS }}
+  container-smoke:
+    runs-on: ubuntu-latest
+    needs:
+      - check-pass
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install packages
+        run: ci/ubuntu-install-packages
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+      - name: Run container smoke tests
+        run: cargo test -p midas --all-features --test container_smoke -- --ignored --test-threads=1
+  deny:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+      - name: Install cargo-deny
+        run: cargo install cargo-deny --locked
+      - name: Check licenses, bans, and sources
+        run: cargo deny check licenses bans sources
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --version 0.21.0 --locked
+      - name: Audit dependencies
+        run: cargo audit
   rustfmt:
     runs-on: ubuntu-latest
     steps:
@@ -153,9 +247,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Install packages
+        run: ci/ubuntu-install-packages
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: stable
-          components: clippy, rustc-dev
-      - run: cargo clippy --all-features --all-targets --tests --benches -- -Dclippy::all
+          components: clippy
+      - run: cargo clippy --workspace --all-targets --all-features -- -D warnings

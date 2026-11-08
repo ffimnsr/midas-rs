@@ -3,7 +3,7 @@
 **/*.rs.bk
 .env
 .env.midas
-.migration-state
+.midas/
 *.md
 !/CODE_OF_CONDUCT.md
 !/CONTRIBUTING.md

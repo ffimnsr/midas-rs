@@ -1,0 +1,17 @@
+[package]
+name = "midas-macros"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
+description = "Procedural macros for the midas migration library"
+readme = "../../README.md"
+
+[lib]
+name = "midas_macros"
+proc-macro = true
+
+[dependencies]

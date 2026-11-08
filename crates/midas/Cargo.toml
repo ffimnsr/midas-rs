@@ -1,0 +1,54 @@
+[package]
+name = "midas"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
+categories.workspace = true
+keywords.workspace = true
+description = "Do painless migration 🦀"
+readme = "../../README.md"
+
+[lib]
+name = "midas"
+
+[features]
+default = ["postgres", "mysql", "sqlite"]
+postgres = ["dep:postgres"]
+mysql = ["dep:mysql"]
+sqlite = ["dep:rusqlite"]
+macros = ["dep:midas-macros"]
+tls-native-tls = ["dep:postgres-native-tls", "dep:native-tls", "mysql?/native-tls"]
+# The `mysql` crate enables both TLS backends additively and fails to build when
+# `native-tls` and `rustls-tls` are active together, so MySQL follows the
+# native-tls backend. `--all-features` must stay buildable.
+tls-rustls = ["dep:postgres-rustls"]
+openssl-vendored = ["tls-native-tls", "native-tls/vendored"]
+
+[dependencies]
+console.workspace = true
+crc.workspace = true
+indicatif.workspace = true
+indoc.workspace = true
+midas-macros = { workspace = true, optional = true }
+mk_ext_prettytable.workspace = true
+mysql = { workspace = true, optional = true }
+native-tls = { workspace = true, optional = true }
+postgres = { workspace = true, optional = true }
+postgres-native-tls = { workspace = true, optional = true }
+postgres-rustls = { workspace = true, optional = true }
+regex.workspace = true
+rusqlite = { workspace = true, optional = true }
+serde.workspace = true
+thiserror.workspace = true
+toml.workspace = true
+tracing.workspace = true
+url.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+testcontainers.workspace = true
+testcontainers-modules.workspace = true
