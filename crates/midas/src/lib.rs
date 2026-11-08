@@ -6,6 +6,7 @@
 //!
 //! Driver modules are compiled only when their feature is enabled. The
 //! following doctests prove the module is absent otherwise.
+#![forbid(unsafe_code)]
 #![cfg_attr(
   not(feature = "postgres"),
   doc = "```compile_fail\nuse midas::sequel::postgres;\n```"

@@ -1,6 +1,9 @@
 //! PostgreSQL backend.
 
-use std::time::Duration;
+use std::time::{
+  Duration,
+  Instant,
+};
 
 use postgres::{
   Client,
@@ -245,14 +248,24 @@ impl MigrationStore for Postgres {
 
 impl Locker for Postgres {
   fn lock(&mut self) -> Result<()> {
-    let row = self
-      .client
-      .query_one("select pg_try_advisory_lock($1)", &[&self.lock_key])?;
-    let acquired: bool = row.get(0);
-    if acquired {
-      Ok(())
-    } else {
-      Err(Error::LockTimeout { backend: "postgres" })
+    let started = Instant::now();
+    loop {
+      let row = self
+        .client
+        .query_one("select pg_try_advisory_lock($1)", &[&self.lock_key])?;
+      let acquired: bool = row.get(0);
+      if acquired {
+        return Ok(());
+      }
+
+      let elapsed = started.elapsed();
+      if elapsed >= self.lock_timeout {
+        return Err(Error::LockTimeout { backend: "postgres" });
+      }
+
+      // Back off without overshooting the configured deadline.
+      let remaining = self.lock_timeout.saturating_sub(elapsed);
+      std::thread::sleep(remaining.min(Duration::from_millis(50)));
     }
   }
 

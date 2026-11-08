@@ -33,7 +33,7 @@ These are settled. Implement them as written.
 - Metadata shape: SQLx-compatible columns.
 - SQLx target: 0.9.x, file/metadata interop only; no SQLx production dependency.
 - Workspace: `midas` library, `midas-cli` binaries, `midas-macros` proc macros.
-- MSRV: 1.86.
+- MSRV: 1.99.
 - TLS: disabled by default; `native-tls` is the default backend when enabled;
   `tls-rustls` and `openssl-vendored` are optional.
 - Previous schema state: `.midas/state.json`.
@@ -82,7 +82,7 @@ Roadmap reference: WS1, M0; audit sections 9.4 and 9.8.
 
 ## Rules
 
-- Use Rust edition 2021 and set workspace MSRV to `1.86`.
+- Use Rust edition 2021 and set workspace MSRV to `1.99`.
 - Use `thiserror` for public errors. `anyhow` is allowed only in binaries and tests.
 - Use `sha2` for SHA-384 migration checksums.
 - Use `crc` for the SQLx-compatible advisory-lock key.
@@ -110,7 +110,7 @@ Roadmap reference: WS1, M0; audit sections 9.4 and 9.8.
 - [x] Create root `Cargo.toml` with `[workspace]`, `[workspace.package]`, and
       `[workspace.dependencies]`.
   - [x] Set `members = ["crates/midas", "crates/midas-cli", "crates/midas-macros"]`.
-  - [x] Set `edition = "2021"` and `rust-version = "1.86"`.
+  - [x] Set `edition = "2021"` and `rust-version = "1.99"`.
   - [x] Move shared dependency versions into `[workspace.dependencies]`.
 - [x] Create `crates/midas/` and move:
   - [x] `src/lib.rs` -> `crates/midas/src/lib.rs`
@@ -308,7 +308,7 @@ Roadmap reference: WS1, M0; audit sections 9.4 and 9.8.
       `expect()`, or `panic!()`.
 - AC-0.5 `init` creates only `midas.toml`, `schema.toml`, and `migrations/`, and a
       second run fails without `--force`.
-- AC-0.6 CI runs MSRV 1.86, the feature matrix, `cargo deny`, and `cargo audit`.
+- AC-0.6 CI runs MSRV 1.99, the feature matrix, `cargo deny`, and `cargo audit`.
 - AC-0.7 The Postgres/MySQL/SQLite test harness starts and cleans up in CI.
 - AC-0.8 No default feature enables `openssl-vendored` or `rand`.
 
@@ -1255,7 +1255,7 @@ Roadmap reference: WS6, M7; audit section 9.8.
 
 ### 7.1 CI matrix and MSRV
 
-- [ ] Add an MSRV job using Rust `1.86`.
+- [ ] Add an MSRV job using Rust `1.99`.
   - [ ] Run `cargo check --workspace --all-features`.
   - [ ] Run `cargo test --workspace --all-features --quiet`.
 - [ ] Add a feature matrix job:
@@ -1345,7 +1345,7 @@ Roadmap reference: WS6, M7; audit section 9.8.
 ## Acceptance criteria
 
 - AC-7.1 CI passes on Linux, macOS, and Windows.
-- AC-7.2 The MSRV 1.86 job passes.- [ ] Add a Docker smoke test:
+- AC-7.2 The MSRV 1.99 job passes.- [ ] Add a Docker smoke test:
 
 - AC-7.3 The feature matrix passes for every listed combination.
 - AC-7.4 Postgres, MySQL, and SQLite integration suites pass.

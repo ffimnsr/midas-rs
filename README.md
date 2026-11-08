@@ -114,10 +114,10 @@ Binary for different OS distribution can be downloaded [here](https://github.com
 
 ### From source
 
-If you're into **Rust**, then midas can be installed with `cargo`. The minimum supported version of Rust is `1.37.0`. The binaries produce may be bigger than expected as it contains debug symbols.
+If you're into **Rust**, then midas can be installed with `cargo`. The minimum supported version of Rust is `1.99.0`. The binaries produce may be bigger than expected as it contains debug symbols.
 
 ```bash
-cargo install midas
+cargo install midas-cli
 ```
 
 ### For containers

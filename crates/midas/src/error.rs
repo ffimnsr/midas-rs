@@ -182,6 +182,12 @@ mod tests {
   }
 
   #[test]
+  fn error_is_send_and_sync() {
+    fn assert_send_sync<T: Send + Sync>() {}
+    assert_send_sync::<Error>();
+  }
+
+  #[test]
   fn user_facing_variants_display() {
     let error = Error::MigrationNotFound { version: 42 };
     assert_eq!(error.to_string(), "migration 42 not found");

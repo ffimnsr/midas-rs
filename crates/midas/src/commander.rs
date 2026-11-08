@@ -94,6 +94,11 @@ impl Migrator {
 
   /// Apply every pending migration.
   pub fn up(&mut self) -> Result<()> {
+    if self.migrations.is_empty() {
+      println!("There are no available migration files.");
+      return Ok(());
+    }
+
     let applied = self.applied_versions()?;
     let pending = self
       .migrations

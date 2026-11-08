@@ -238,16 +238,25 @@ where
 
 fn project_template(config: &Config) -> String {
   let dir = config.migrations_dir.to_string_lossy();
+  let dialect = configured_dialect(config);
+  let (default_schema, metadata_schema) = match dialect {
+    "sqlite" => ("default_schema = \"main\"\n".to_string(), String::new()),
+    "mysql" => (String::new(), String::new()),
+    _ => (
+      "default_schema = \"public\"\n".to_string(),
+      "metadata_schema = \"midas\"\n".to_string(),
+    ),
+  };
+  let managed_schema = if dialect == "sqlite" { "main" } else { "public" };
+
   format!(
     r#"# midas project configuration
 [project]
-dialect = "postgres"
-default_schema = "public"
-
+dialect = "{dialect}"
+{default_schema}
 [database]
 url_env = "DATABASE_URL"
-metadata_schema = "midas"
-metadata_table = "__schema_migrations"
+{metadata_schema}metadata_table = "__schema_migrations"
 shadow_url_env = "SHADOW_DATABASE_URL"
 
 [migrations]
@@ -255,10 +264,25 @@ dir = "{dir}"
 transaction = "per-migration"
 
 [managed]
-schemas = ["public"]
+schemas = ["{managed_schema}"]
 ignore_objects = []
 "#
   )
+}
+
+fn configured_dialect(config: &Config) -> &'static str {
+  match config.database_url.as_deref() {
+    Some(url) if url.starts_with("mysql") => "mysql",
+    Some(url)
+      if url.starts_with("sqlite")
+        || url.starts_with("file")
+        || url.starts_with('.')
+        || url.starts_with('/') =>
+    {
+      "sqlite"
+    },
+    _ => "postgres",
+  }
 }
 
 fn schema_template() -> &'static str {
@@ -290,6 +314,25 @@ mod tests {
     let template = project_template(&config);
     assert!(template.contains("dir = \"custom_migrations\""));
     assert!(template.contains("metadata_table = \"__schema_migrations\""));
+  }
+
+  #[test]
+  fn project_template_follows_the_configured_dialect() {
+    let sqlite = Config {
+      database_url: Some("sqlite://./app.db3".to_string()),
+      ..Config::default()
+    };
+    let template = project_template(&sqlite);
+    assert!(template.contains("dialect = \"sqlite\""));
+    assert!(!template.contains("metadata_schema"));
+
+    let mysql = Config {
+      database_url: Some("mysql://root@localhost/app".to_string()),
+      ..Config::default()
+    };
+    let template = project_template(&mysql);
+    assert!(template.contains("dialect = \"mysql\""));
+    assert!(!template.contains("default_schema"));
   }
 
   #[test]

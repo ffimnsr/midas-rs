@@ -247,11 +247,18 @@ impl DatabaseAdmin for Sqlite {
     if self.file_path == ":memory:" {
       return Ok(());
     }
-    match std::fs::remove_file(&self.file_path) {
-      Ok(()) => Ok(()),
-      Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
-      Err(error) => Err(Error::Io(error)),
+    for path in [
+      self.file_path.clone(),
+      format!("{}-wal", self.file_path),
+      format!("{}-shm", self.file_path),
+    ] {
+      match std::fs::remove_file(path) {
+        Ok(()) => {},
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {},
+        Err(error) => return Err(Error::Io(error)),
+      }
     }
+    Ok(())
   }
 
   fn database_exists(&mut self, _: &str) -> Result<bool> {

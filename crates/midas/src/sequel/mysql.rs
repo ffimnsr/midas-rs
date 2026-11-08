@@ -194,7 +194,12 @@ impl MigrationStore for Mysql {
 
 impl Locker for Mysql {
   fn lock(&mut self) -> Result<()> {
-    let timeout = self.lock_timeout.as_secs().min(u64::from(u32::MAX)) as u32;
+    // MySQL wants whole seconds; round up so sub-second timeouts still wait.
+    let timeout = self
+      .lock_timeout
+      .as_secs()
+      .saturating_add(u64::from(self.lock_timeout.subsec_nanos() > 0))
+      .min(u64::from(u32::MAX)) as u32;
     let acquired: Option<Option<i64>> = self.conn.exec_first(
       "SELECT GET_LOCK(:name, :timeout)",
       params! { "name" => LOCK_NAME, "timeout" => timeout },

@@ -28,7 +28,7 @@ jobs:
         with:
           toolchain: stable
       - name: Run cargo check tool
-        run: cargo check --workspace --all-targets --all-features --verbose
+        run: cargo check --workspace --all-targets --all-features --locked --verbose
       - name: Verify workspace package inventory
         run: |
           python3 - <<'PY'
@@ -68,7 +68,7 @@ jobs:
         with:
           toolchain: stable
       - name: Check feature set
-        run: cargo check --workspace --all-targets ${{ matrix.features }} --verbose
+        run: cargo check --workspace --all-targets ${{ matrix.features }} --locked --verbose
       - name: Verify disabled driver modules are absent
         if: matrix.features == '--no-default-features'
         run: cargo test -p midas --no-default-features --doc --quiet
@@ -81,9 +81,9 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: "1.86.0"
+          toolchain: "1.99.0"
       - name: Check MSRV
-        run: cargo check --workspace --all-targets --all-features --verbose
+        run: cargo check --workspace --all-targets --all-features --locked --verbose
   test:
     runs-on: ${{ matrix.os }}
     needs:
@@ -229,7 +229,7 @@ jobs:
         with:
           toolchain: stable
       - name: Install cargo-audit
-        run: cargo install cargo-audit --version 0.21.0 --locked
+        run: cargo install cargo-audit --version 0.22.2 --locked
       - name: Audit dependencies
         run: cargo audit
   rustfmt:

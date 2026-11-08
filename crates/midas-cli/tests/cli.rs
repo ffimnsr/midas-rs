@@ -169,6 +169,29 @@ fn create_slugifies_spaces() {
 }
 
 #[test]
+fn source_flag_controls_migrations_directory() {
+  let temp = TempDir::new().expect("temp dir");
+  common::run_midas(&["--source", "db/migrations", "create", "initial"], temp.path()).success();
+  assert!(temp.child("db/migrations").is_dir());
+}
+
+#[test]
+fn list_reads_migrations_without_a_database() {
+  let temp = TempDir::new().expect("temp dir");
+  let migrations = temp.path().join("migrations");
+  common::write_migration(
+    &migrations,
+    "initial",
+    "create table t (id int);",
+    "drop table t;",
+  );
+
+  common::run_midas(&["list"], temp.path())
+    .success()
+    .stdout(predicate::str::contains("initial"));
+}
+
+#[test]
 fn write_migration_helper_is_usable() {
   let temp = TempDir::new().expect("temp dir");
   let migrations = temp.path().join("migrations");

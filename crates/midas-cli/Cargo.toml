@@ -41,18 +41,17 @@ clap.workspace = true
 clap_complete.workspace = true
 console.workspace = true
 dotenvy.workspace = true
-indoc.workspace = true
-midas = { path = "../midas", default-features = false }
+midas.workspace = true
 mk_ext_prettytable.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
-url.workspace = true
 
 [dev-dependencies]
 assert_cmd.workspace = true
 assert_fs.workspace = true
 predicates.workspace = true
 snapbox.workspace = true
+toml.workspace = true
 trycmd.workspace = true
 
 [package.metadata.deb]

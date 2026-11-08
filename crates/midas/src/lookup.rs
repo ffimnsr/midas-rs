@@ -4,6 +4,7 @@ use std::collections::BTreeMap;
 use std::fs::{
   self,
   File,
+  OpenOptions,
 };
 use std::io::prelude::*;
 use std::io::BufReader;
@@ -111,6 +112,10 @@ pub fn build_migration_list(path: &Path) -> Result<MigrationFiles> {
     .filter_map(|entry| entry.ok())
     .collect::<Vec<_>>();
   for entry in entries {
+    if !entry.path().is_file() {
+      continue;
+    }
+
     let filename = entry.file_name();
     let Some(filename) = filename.to_str() else {
       continue;
@@ -149,7 +154,12 @@ pub fn build_migration_list(path: &Path) -> Result<MigrationFiles> {
       number = migration.number,
       "parsed migration"
     );
-    files.insert(migration.number, migration);
+    let number = migration.number;
+    if files.insert(number, migration).is_some() {
+      return Err(Error::migration(format!(
+        "duplicate migration version {number:013}"
+      )));
+    }
   }
 
   Ok(files)
@@ -169,7 +179,22 @@ pub fn create_migration_file(path: &Path, slug: &str) -> Result<()> {
 
   fs::create_dir_all(path)?;
   tracing::trace!(path = %filepath.to_string_lossy(), "creating migration file");
-  let mut file = File::create(filepath)?;
+  // `create_new` prevents two migrations created in the same millisecond from
+  // silently truncating each other.
+  let mut file = OpenOptions::new()
+    .write(true)
+    .create_new(true)
+    .open(&filepath)
+    .map_err(|error| {
+      if error.kind() == std::io::ErrorKind::AlreadyExists {
+        Error::migration(format!(
+          "migration file `{}` already exists",
+          filepath.to_string_lossy()
+        ))
+      } else {
+        Error::Io(error)
+      }
+    })?;
   let contents = indoc! {"\
     -- # Put your SQL below migration seperator.
     -- !UP
@@ -216,6 +241,18 @@ mod tests {
     assert_eq!(migration.description(), "create_users");
     assert!(migration.up_sql().is_empty());
     assert!(migration.down_sql().is_empty());
+  }
+
+  #[test]
+  fn duplicate_versions_are_rejected() {
+    let dir = tempfile::tempdir().expect("temp dir");
+    for name in ["0000000000001_a.sql", "0000000000001_b.sql"] {
+      std::fs::write(dir.path().join(name), "-- !UP\n\n-- !DOWN\n").expect("write migration");
+    }
+
+    let error = build_migration_list(dir.path()).expect_err("duplicate versions must fail");
+    assert!(matches!(error, Error::Migration(_)));
+    assert!(error.to_string().contains("0000000000001"));
   }
 
   #[test]
