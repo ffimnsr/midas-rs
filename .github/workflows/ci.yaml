@@ -206,7 +206,21 @@ jobs:
         with:
           toolchain: stable
       - name: Run container smoke tests
-        run: cargo test -p midas --all-features --test container_smoke -- --ignored --test-threads=1
+        run: cargo test -p midas --all-features --test container_smoke --test postgres_engine -- --ignored --test-threads=1
+  embedded-macro:
+    runs-on: ubuntu-latest
+    needs:
+      - check-pass
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install packages
+        run: ci/ubuntu-install-packages
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+      - name: Run the embedded migrate! fixture
+        run: cargo run --manifest-path crates/midas/tests/fixtures/embedded/Cargo.toml
   deny:
     runs-on: ubuntu-latest
     steps:

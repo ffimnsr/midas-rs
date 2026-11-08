@@ -26,7 +26,6 @@ pub use introspect::{
   SchemaSnapshot,
 };
 pub use store::{
-  AppliedMigration,
   Locker,
   MigrationStore,
 };
@@ -66,8 +65,8 @@ pub enum DatabaseEngine {
 impl DatabaseEngine {
   /// Resolve an engine from a database URL or a local SQLite path.
   pub fn from_url(raw: &str) -> Result<Self> {
-    // Local paths are treated as SQLite databases without an explicit scheme.
-    if raw.starts_with('.') || raw.starts_with('/') {
+    // Local paths and SQLite's in-memory sentinel are accepted without a scheme.
+    if raw.starts_with('.') || raw.starts_with('/') || raw == ":memory:" {
       return Ok(Self::Sqlite);
     }
 
@@ -103,6 +102,22 @@ pub trait Backend: Executor + MigrationStore + Locker + DatabaseAdmin + Dialect 
 
 impl<T> Backend for T where T: Executor + MigrationStore + Locker + DatabaseAdmin + Dialect + Introspector {}
 
+/// Extract the target database name from a connection URL.
+pub fn database_name(database_url: &str) -> Result<String> {
+  if DatabaseEngine::from_url(database_url)? == DatabaseEngine::Sqlite {
+    return Ok("sqlite".to_string());
+  }
+
+  let url =
+    url::Url::parse(database_url).map_err(|error| Error::config(format!("invalid database URL: {error}")))?;
+  url
+    .path_segments()
+    .and_then(|mut segments| segments.next_back())
+    .filter(|name| !name.is_empty())
+    .map(ToString::to_string)
+    .ok_or_else(|| Error::config("database name not found in URL"))
+}
+
 /// Open a backend for the configured database URL.
 pub fn connect(config: &Config) -> Result<Box<dyn Backend>> {
   let url = config.require_database_url()?.to_string();
@@ -111,6 +126,36 @@ pub fn connect(config: &Config) -> Result<Box<dyn Backend>> {
     DatabaseEngine::Postgres | DatabaseEngine::CockroachDb => connect_postgres(config),
     DatabaseEngine::Sqlite => connect_sqlite(config, &url),
   }
+}
+
+/// Open a maintenance backend that can create or drop the configured database.
+pub fn connect_admin(config: &Config) -> Result<Box<dyn DatabaseAdmin>> {
+  let url = config.require_database_url()?.to_string();
+
+  match DatabaseEngine::from_url(&url)? {
+    DatabaseEngine::Postgres | DatabaseEngine::CockroachDb => connect_postgres_admin(config),
+    DatabaseEngine::Sqlite => connect_sqlite_admin(&url),
+  }
+}
+
+#[cfg(feature = "postgres")]
+fn connect_postgres_admin(config: &Config) -> Result<Box<dyn DatabaseAdmin>> {
+  Ok(Box::new(postgres::Postgres::admin(config)?))
+}
+
+#[cfg(not(feature = "postgres"))]
+fn connect_postgres_admin(_: &Config) -> Result<Box<dyn DatabaseAdmin>> {
+  Err(Error::unsupported_feature("postgres", "driver"))
+}
+
+#[cfg(feature = "sqlite")]
+fn connect_sqlite_admin(url: &str) -> Result<Box<dyn DatabaseAdmin>> {
+  Ok(Box::new(sqlite::Sqlite::admin(url)))
+}
+
+#[cfg(not(feature = "sqlite"))]
+fn connect_sqlite_admin(_: &str) -> Result<Box<dyn DatabaseAdmin>> {
+  Err(Error::unsupported_feature("sqlite", "driver"))
 }
 
 #[cfg(feature = "postgres")]
@@ -159,6 +204,10 @@ mod tests {
   fn local_paths_and_urls_resolve_to_engines() {
     assert_eq!(
       DatabaseEngine::from_url("./app.db3").expect("local path"),
+      DatabaseEngine::Sqlite
+    );
+    assert_eq!(
+      DatabaseEngine::from_url(":memory:").expect("memory sentinel"),
       DatabaseEngine::Sqlite
     );
     assert_eq!(

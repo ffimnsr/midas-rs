@@ -14,11 +14,14 @@ use clap::{
   Command,
 };
 use console::style;
-use midas::commander::Migrator;
+use midas::commander::{
+  MigrationInfo,
+  Migrator,
+  MigratorOptions,
+};
 use midas::config::Config;
-use midas::sequel::DatabaseEngine;
 use midas::{
-  lookup,
+  migration,
   sequel,
 };
 use prettytable::format::consts;
@@ -46,67 +49,143 @@ pub fn register(app: Command) -> Command {
         ),
     )
     .subcommand(
-      Command::new("create")
+      Command::new("add")
+        .visible_alias("create")
         .visible_alias("c")
-        .about("Creates a timestamped migration file")
-        .arg(Arg::new("name").help("The migration action name").required(true)),
+        .about("Create a timestamped migration file")
+        .arg(Arg::new("name").help("The migration action name").required(true))
+        .arg(
+          Arg::new("reversible")
+            .long("reversible")
+            .help("Create a .up.sql/.down.sql pair")
+            .action(clap::ArgAction::SetTrue),
+        ),
     )
     .subcommand(
-      Command::new("status")
+      Command::new("run")
+        .visible_alias("up")
+        .visible_alias("u")
+        .about("Apply pending migrations")
+        .arg(
+          Arg::new("target")
+            .long("target")
+            .value_name("version")
+            .help("Apply only migrations up to this version")
+            .num_args(1)
+            .value_parser(value_parser!(i64)),
+        )
+        .arg(json_flag()),
+    )
+    .subcommand(
+      Command::new("info")
+        .visible_alias("status")
         .visible_alias("s")
-        .about("Checks the status of the migration"),
+        .about("Show applied, pending, and dirty migrations")
+        .arg(json_flag()),
     )
     .subcommand(
       Command::new("list")
         .visible_alias("ls")
-        .about("Lists all available migrations"),
+        .about("List migration files without a database"),
     )
     .subcommand(
-      Command::new("up")
-        .visible_alias("u")
-        .about("Apply all pending migrations"),
-    )
-    .subcommand(
-      Command::new("upto")
-        .about("Apply all migrations up to the given migration number")
+      Command::new("revert")
+        .visible_alias("r")
+        .about("Revert applied migrations")
         .arg(
-          Arg::new("migration_number")
-            .help("The migration number to apply up to")
+          Arg::new("to")
+            .long("to")
+            .value_name("version")
+            .help("Revert every migration above this version")
+            .num_args(1)
+            .value_parser(value_parser!(i64)),
+        ),
+    )
+    .subcommand(Command::new("redo").about("Revert and re-apply the last migration"))
+    .subcommand(
+      Command::new("baseline")
+        .about("Mark migrations up to a version as applied without running SQL")
+        .arg(
+          Arg::new("to")
+            .long("to")
+            .value_name("version")
+            .help("Highest version to mark as applied")
             .num_args(1)
             .value_parser(value_parser!(i64))
             .required(true),
         ),
     )
+    .subcommand(Command::new("repair").about("Recompute checksums for applied migrations"))
+    .subcommand(
+      Command::new("resolve")
+        .about("Resolve a dirty migration")
+        .arg(
+          Arg::new("applied")
+            .long("applied")
+            .help("Mark the dirty migration as applied")
+            .action(clap::ArgAction::SetTrue),
+        )
+        .arg(
+          Arg::new("rolled-back")
+            .long("rolled-back")
+            .help("Remove the dirty migration record")
+            .action(clap::ArgAction::SetTrue),
+        )
+        .arg(
+          Arg::new("version")
+            .long("version")
+            .value_name("version")
+            .help("Version to resolve (defaults to the lowest dirty version)")
+            .num_args(1)
+            .value_parser(value_parser!(i64)),
+        ),
+    )
+    .subcommand(Command::new("reset").about("Drop metadata and replay every migration"))
     .subcommand(
       Command::new("down")
         .visible_alias("d")
-        .about("Remove all applied migrations"),
-    )
-    .subcommand(
-      Command::new("revert")
-        .visible_alias("r")
-        .about("Reverts the nth number of migration (defaults to the last migration)")
+        .about("Revert every applied migration")
         .arg(
-          Arg::new("steps")
-            .value_name("num")
-            .help("The number of migrations to revert")
-            .num_args(1)
-            .value_parser(value_parser!(usize))
-            .default_value("1"),
+          Arg::new("force")
+            .long("force")
+            .help("Required confirmation for reverting everything")
+            .action(clap::ArgAction::SetTrue),
         ),
     )
-    .subcommand(Command::new("redo").about("Redo the last migration"))
-    .subcommand(
-      Command::new("drop")
-        .about("Drops everything inside the database (NOTE: must have create/drop privilege)"),
-    )
+}
+
+fn json_flag() -> Arg {
+  Arg::new("json")
+    .long("json")
+    .help("Emit machine-readable JSON")
+    .action(clap::ArgAction::SetTrue)
 }
 
 /// Whether this module owns the given subcommand name.
 pub fn owns(name: &str) -> bool {
   matches!(
     name,
-    "init" | "create" | "list" | "status" | "up" | "upto" | "down" | "redo" | "revert" | "drop"
+    "init"
+      | "add"
+      | "create"
+      | "c"
+      | "run"
+      | "up"
+      | "u"
+      | "info"
+      | "status"
+      | "s"
+      | "list"
+      | "ls"
+      | "revert"
+      | "r"
+      | "redo"
+      | "baseline"
+      | "repair"
+      | "resolve"
+      | "reset"
+      | "down"
+      | "d"
   )
 }
 
@@ -114,15 +193,20 @@ pub fn owns(name: &str) -> bool {
 pub fn dispatch(name: &str, matches: &ArgMatches, context: &Context) -> Result<()> {
   match name {
     "init" => init(&context.config, matches.get_flag("force")),
-    "create" => create(matches, &context.config),
-    "list" => list(&context.config),
-    "status" => with_migrator(context, |migrator| migrator.status()),
-    "up" => with_migrator(context, |migrator| migrator.up()),
-    "upto" => upto(matches, context),
-    "down" => with_migrator(context, |migrator| migrator.down()),
-    "redo" => with_migrator(context, |migrator| migrator.redo()),
-    "revert" => revert(matches, context),
-    "drop" => drop_database(context),
+    "add" | "create" | "c" => add(matches, context),
+    "run" | "up" | "u" => run(matches, context),
+    "info" | "status" | "s" => info(matches, context),
+    "list" | "ls" => list(&context.config),
+    "revert" | "r" => revert(matches, context),
+    "redo" => with_migrator(context, false, |migrator| migrator.redo()).map(drop),
+    "baseline" => baseline(matches, context),
+    "repair" => with_migrator(context, false, |migrator| migrator.repair()).map(drop),
+    "resolve" => resolve(matches, context),
+    "reset" => with_migrator(context, false, |migrator| migrator.reset()).map(drop),
+    "down" | "d" => with_migrator(context, false, |migrator| {
+      migrator.down(matches.get_flag("force"))
+    })
+    .map(drop),
     other => anyhow::bail!("unknown migration subcommand `{other}`"),
   }
 }
@@ -163,29 +247,56 @@ fn init(config: &Config, force: bool) -> Result<()> {
   Ok(())
 }
 
-fn create(matches: &ArgMatches, config: &Config) -> Result<()> {
+fn add(matches: &ArgMatches, context: &Context) -> Result<()> {
   let slug = matches
     .get_one::<String>("name")
     .context("migration name is required")?;
-  let slug = slug.to_ascii_lowercase().replace(' ', "_");
-  lookup::create_migration_file(&config.migrations_dir, &slug)?;
-  println!("Created migration `{slug}`.");
+  let reversible = matches.get_flag("reversible");
+  let version = migration::create_migration_file(&context.config.migrations_dir, slug, reversible)?;
+  println!("Created migration {version:013}.");
   Ok(())
 }
 
+fn run(matches: &ArgMatches, context: &Context) -> Result<()> {
+  let target = matches.get_one::<i64>("target").copied();
+  if target.is_some_and(|target| target < 0) {
+    anyhow::bail!("target version must be non-negative");
+  }
+  let info = with_migrator(context, matches.get_flag("json"), |migrator| migrator.up(target))?;
+  output(matches, &info)
+}
+
+fn info(matches: &ArgMatches, context: &Context) -> Result<()> {
+  let info = if matches.get_flag("json") {
+    with_migrator(context, true, |migrator| migrator.info())?
+  } else {
+    with_migrator(context, false, |migrator| migrator.status())?
+  };
+  output(matches, &info)
+}
+
 fn list(config: &Config) -> Result<()> {
-  let migrations = lookup::build_migration_list(&config.migrations_dir)?;
+  let migrations = migration::discover(&config.migrations_dir)?;
   if migrations.is_empty() {
     println!("There are no available migration files.");
     return Ok(());
   }
 
   let mut table = Table::new();
-  table.set_titles(row![Fbb->"Migration No.", Fbb->"Filename"]);
+  table.set_titles(row![Fbb->"Migration No.", Fbb->"Filename", Fbb->"Description"]);
   table.set_format(*consts::FORMAT_CLEAN);
 
-  for (number, migration) in migrations.iter() {
-    table.add_row(row![b->&format!("{number:013}"), Fgb->&migration.filename]);
+  for migration in migrations.values() {
+    let filename = migration
+      .source_path
+      .file_name()
+      .map(|name| name.to_string_lossy().into_owned())
+      .unwrap_or_default();
+    table.add_row(row![
+      b->&format!("{:013}", migration.version),
+      Fgb->&filename,
+      &migration.description
+    ]);
   }
 
   let msg = style("Available migrations:").bold().cyan();
@@ -198,43 +309,60 @@ fn list(config: &Config) -> Result<()> {
   Ok(())
 }
 
-fn upto(matches: &ArgMatches, context: &Context) -> Result<()> {
-  let version = *matches
-    .get_one::<i64>("migration_number")
-    .context("migration number is required")?;
-  if version < 0 {
-    anyhow::bail!("migration number must be non-negative");
-  }
-  with_migrator(context, move |migrator| migrator.upto(version))
-}
-
 fn revert(matches: &ArgMatches, context: &Context) -> Result<()> {
-  let steps = *matches
-    .get_one::<usize>("steps")
-    .context("revert steps are required")?;
-  with_migrator(context, move |migrator| {
-    for _ in 0..steps {
-      migrator.revert()?;
-    }
-    Ok(())
-  })
+  let target = matches.get_one::<i64>("to").copied();
+  if target.is_some_and(|target| target < 0) {
+    anyhow::bail!("revert target must be non-negative");
+  }
+  with_migrator(context, false, |migrator| migrator.revert_to(target)).map(drop)
 }
 
-fn drop_database(context: &Context) -> Result<()> {
-  let database_url = context.config.require_database_url()?.to_string();
-  with_migrator(context, move |migrator| migrator.drop(&database_url))
+fn baseline(matches: &ArgMatches, context: &Context) -> Result<()> {
+  let target = *matches
+    .get_one::<i64>("to")
+    .context("baseline version is required")?;
+  if target < 0 {
+    anyhow::bail!("baseline version must be non-negative");
+  }
+  with_migrator(context, false, |migrator| migrator.baseline(target)).map(drop)
 }
 
-fn with_migrator<F>(context: &Context, action: F) -> Result<()>
+fn resolve(matches: &ArgMatches, context: &Context) -> Result<()> {
+  let applied = matches.get_flag("applied");
+  let rolled_back = matches.get_flag("rolled-back");
+  if applied == rolled_back {
+    anyhow::bail!("pass exactly one of --applied or --rolled-back");
+  }
+  let version = matches.get_one::<i64>("version").copied();
+  if applied {
+    with_migrator(context, false, |migrator| migrator.resolve_applied(version)).map(drop)
+  } else {
+    with_migrator(context, false, |migrator| migrator.resolve_rolled_back(version)).map(drop)
+  }
+}
+
+fn output(matches: &ArgMatches, info: &MigrationInfo) -> Result<()> {
+  if matches.get_flag("json") {
+    println!("{}", serde_json::to_string(info)?);
+  }
+  Ok(())
+}
+
+fn with_migrator<F, T>(context: &Context, quiet: bool, action: F) -> Result<T>
 where
-  F: FnOnce(&mut Migrator) -> midas::Result<()>,
+  F: FnOnce(&mut Migrator) -> midas::Result<T>,
 {
   context.config.require_database_url()?;
-  let migrations = lookup::build_migration_list(&context.config.migrations_dir)?;
+  let migrations = migration::discover(&context.config.migrations_dir)?;
   let backend = sequel::connect(&context.config)?;
-  let mut migrator = Migrator::new(backend, migrations);
-  action(&mut migrator)?;
-  Ok(())
+  let options = MigratorOptions {
+    dry_run: context.dry_run,
+    no_lock: context.no_lock,
+    transaction: context.config.transaction,
+    quiet,
+  };
+  let mut migrator = Migrator::new(backend, migrations).with_options(options);
+  Ok(action(&mut migrator)?)
 }
 
 fn project_template(config: &Config) -> String {
@@ -274,8 +402,8 @@ fn configured_dialect(config: &Config) -> &'static str {
   config
     .database_url
     .as_deref()
-    .and_then(|url| DatabaseEngine::from_url(url).ok())
-    .map(DatabaseEngine::dialect_name)
+    .and_then(|url| midas::sequel::DatabaseEngine::from_url(url).ok())
+    .map(midas::sequel::DatabaseEngine::dialect_name)
     .unwrap_or("postgres")
 }
 
@@ -291,7 +419,8 @@ mod tests {
   #[test]
   fn owners_are_explicit() {
     for name in [
-      "init", "create", "list", "status", "up", "upto", "down", "redo", "revert", "drop",
+      "init", "add", "create", "run", "up", "info", "status", "list", "revert", "redo", "baseline", "repair",
+      "resolve", "reset", "down",
     ] {
       assert!(owns(name), "expected owner for `{name}`");
     }

@@ -1,0 +1,11 @@
+[package]
+name = "midas-embedded-fixture"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# Opt out of the parent workspace; this crate is built separately by CI.
+[workspace]
+
+[dependencies]
+midas = { path = "../../..", features = ["macros", "sqlite"] }

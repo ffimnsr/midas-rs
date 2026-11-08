@@ -1,8 +1,8 @@
 //! # Cargo-Migrate
 //! The entry point for `cargo migrate`.
 
-use anyhow::Result;
+use std::process::ExitCode;
 
-fn main() -> Result<()> {
-  midas_cli::cli::midas_entry("migrate", true)
+fn main() -> ExitCode {
+  midas_cli::cli::main_entry("migrate", true)
 }

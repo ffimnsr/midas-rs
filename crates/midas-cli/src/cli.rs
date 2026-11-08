@@ -3,6 +3,7 @@
 use std::env;
 use std::ffi::OsStr;
 use std::path::PathBuf;
+use std::process::ExitCode;
 use std::str::FromStr;
 use std::time::Instant;
 
@@ -31,6 +32,36 @@ const PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// The package description.
 const PKG_DESCRIPTION: &str = env!("CARGO_PKG_DESCRIPTION");
+
+/// Entry point used by the binaries. Maps errors to documented exit codes.
+pub fn main_entry(command_name: &str, is_subcommand: bool) -> ExitCode {
+  match midas_entry(command_name, is_subcommand) {
+    Ok(()) => ExitCode::SUCCESS,
+    Err(error) => {
+      eprintln!("error: {error:#}");
+      ExitCode::from(exit_code(&error))
+    },
+  }
+}
+
+/// Map an error chain to the CLI exit code contract.
+///
+/// `0` success, `1` user/config error, `2` database error, `3` dirty state,
+/// `4` drift.
+pub fn exit_code(error: &anyhow::Error) -> u8 {
+  for cause in error.chain() {
+    let Some(error) = cause.downcast_ref::<midas::Error>() else {
+      continue;
+    };
+    return match error {
+      midas::Error::DirtyMigration { .. } => 3,
+      midas::Error::Drift(_) => 4,
+      midas::Error::Database(_) | midas::Error::Lock(_) | midas::Error::LockTimeout { .. } => 2,
+      _ => 1,
+    };
+  }
+  1
+}
 
 /// Entry point shared by the `midas` and `cargo-migrate` binaries.
 pub fn midas_entry(command_name: &str, is_subcommand: bool) -> Result<()> {
@@ -80,7 +111,8 @@ pub fn midas_entry(command_name: &str, is_subcommand: bool) -> Result<()> {
   // (possibly invalid) `midas.toml`.
   let config_dir = (matches.subcommand_name() != Some("init")).then_some(cwd.as_path());
   let config = Config::load(&ProcessEnv, &overrides, config_dir)?;
-  let context = commands::Context::new(config);
+  let context =
+    commands::Context::new(config).with_flags(matches.get_flag("dry-run"), matches.get_flag("no-lock"));
 
   let start = Instant::now();
   commands::dispatch(&matches, &context)?;
@@ -133,6 +165,20 @@ fn build_cli(command_name: &str, is_subcommand: bool) -> Command {
       Arg::new("no-color")
         .long("no-color")
         .help("Disable colored output (honors NO_COLOR)")
+        .action(clap::ArgAction::SetTrue)
+        .global(true),
+    )
+    .arg(
+      Arg::new("dry-run")
+        .long("dry-run")
+        .help("Print SQL without executing it")
+        .action(clap::ArgAction::SetTrue)
+        .global(true),
+    )
+    .arg(
+      Arg::new("no-lock")
+        .long("no-lock")
+        .help("Skip the advisory migration lock")
         .action(clap::ArgAction::SetTrue)
         .global(true),
     );
@@ -216,11 +262,29 @@ mod tests {
       .map(|command| command.get_name())
       .collect::<Vec<_>>();
 
-    for removed in ["faker", "update", "seed"] {
+    for removed in ["faker", "update", "seed", "upto", "drop"] {
       assert!(!names.contains(&removed), "`{removed}` must be removed");
     }
-    for present in ["init", "create", "status", "list", "up", "completion"] {
+    for present in ["init", "add", "run", "info", "list", "resolve", "completion"] {
       assert!(names.contains(&present), "`{present}` must exist");
     }
+  }
+
+  #[test]
+  fn exit_codes_follow_the_contract() {
+    let error = anyhow::Error::new(midas::Error::DirtyMigration { version: 1 });
+    assert_eq!(exit_code(&error), 3);
+
+    let error = anyhow::Error::new(midas::Error::LockTimeout { backend: "postgres" });
+    assert_eq!(exit_code(&error), 2);
+
+    let error = anyhow::Error::new(midas::Error::Drift("boom".to_string()));
+    assert_eq!(exit_code(&error), 4);
+
+    let error = anyhow::Error::new(midas::Error::migration("boom"));
+    assert_eq!(exit_code(&error), 1);
+
+    let error = anyhow::anyhow!("plain");
+    assert_eq!(exit_code(&error), 1);
   }
 }

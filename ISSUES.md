@@ -355,78 +355,78 @@ Roadmap reference: WS2, M1; audit sections 9.1–9.3 and 9.5.
 
 ### 1.1 Raw migration model
 
-- [ ] Add `crates/midas/src/migration/mod.rs` and `migration/file.rs`.
-- [ ] Define `pub struct Migration`:
-  - [ ] `version: i64`
-  - [ ] `description: String`
-  - [ ] `up: String`
-  - [ ] `down: Option<String>`
-  - [ ] `no_tx: bool`
-  - [ ] `checksum_up: [u8; 48]`
-  - [ ] `checksum_down: Option<[u8; 48]>`
-  - [ ] `source_path: PathBuf`
-  - [ ] `format: MigrationFormat`
-- [ ] Define `pub enum MigrationFormat { Midas, SqlxUpDown, SqlxOneWay }`.
-- [ ] Add `migration::parse_bytes(path, bytes) -> Result<Migration>`.
-  - [ ] Strip a UTF-8 BOM if present.
-  - [ ] Decode UTF-8; return `Error::Migration` with path and byte offset on failure.
-  - [ ] Split on exact lines `-- !UP` and `-- !DOWN`.
-  - [ ] Preserve every line, including blank lines and trailing newline.
-  - [ ] Allow a missing `-- !DOWN` section and set `down = None`.
-  - [ ] Detect `-- no-transaction` at the beginning of the file or immediately after
+- [x] Add `crates/midas/src/migration/mod.rs` and `migration/file.rs`.
+- [x] Define `pub struct Migration`:
+  - [x] `version: i64`
+  - [x] `description: String`
+  - [x] `up: String`
+  - [x] `down: Option<String>`
+  - [x] `no_tx: bool`
+  - [x] `checksum_up: [u8; 48]`
+  - [x] `checksum_down: Option<[u8; 48]>`
+  - [x] `source_path: PathBuf`
+  - [x] `format: MigrationFormat`
+- [x] Define `pub enum MigrationFormat { Midas, SqlxUpDown, SqlxOneWay }`.
+- [x] Add `migration::parse_bytes(path, bytes) -> Result<Migration>`.
+  - [x] Strip a UTF-8 BOM if present.
+  - [x] Decode UTF-8; return `Error::Migration` with path and byte offset on failure.
+  - [x] Split on exact lines `-- !UP` and `-- !DOWN`.
+  - [x] Preserve every line, including blank lines and trailing newline.
+  - [x] Allow a missing `-- !DOWN` section and set `down = None`.
+  - [x] Detect `-- no-transaction` at the beginning of the file or immediately after
         the UP marker.
-  - [ ] Normalize `\r\n` and `\r` to `\n` for checksum input only.
-  - [ ] Compute SHA-384 over the normalized UP and DOWN strings.
-- [ ] Add unit tests with inline fixtures:
-  - [ ] Blank line between two statements is preserved in `up`.
-  - [ ] Dollar-quoted function body is byte-identical in `up`.
-  - [ ] CRLF input yields the same checksum as LF input.
-  - [ ] UTF-8 BOM input yields the same checksum as no-BOM input.
-  - [ ] Missing DOWN yields `down = None` and does not error.
-  - [ ] `-- no-transaction` sets `no_tx = true`.
-  - [ ] Invalid UTF-8 returns a path-bearing error.
+  - [x] Normalize `\r\n` and `\r` to `\n` for checksum input only.
+  - [x] Compute SHA-384 over the normalized UP and DOWN strings.
+- [x] Add unit tests with inline fixtures:
+  - [x] Blank line between two statements is preserved in `up`.
+  - [x] Dollar-quoted function body is byte-identical in `up`.
+  - [x] CRLF input yields the same checksum as LF input.
+  - [x] UTF-8 BOM input yields the same checksum as no-BOM input.
+  - [x] Missing DOWN yields `down = None` and does not error.
+  - [x] `-- no-transaction` sets `no_tx = true`.
+  - [x] Invalid UTF-8 returns a path-bearing error.
 
 ### 1.2 Filename parsing and creation
 
-- [ ] Replace the regex in `lookup.rs` with a parser for:
-  - [ ] `<version>_<description>.sql`
-  - [ ] `<version>_<description>.up.sql`
-  - [ ] `<version>_<description>.down.sql`
-- [ ] Parse `version` as `i64`; reject zero and negative values.
-- [ ] Parse `description` from the filename; permit `[A-Za-z0-9._-]+`.
-- [ ] Add table-driven tests:
-  - [ ] `1_init.sql` -> version 1.
-  - [ ] `20240101000000_init.sql` -> version `20240101000000`.
-  - [ ] `1_add-users.sql` -> description `add-users`.
-  - [ ] `1_add.users.sql` -> description `add.users`.
-  - [ ] `0_init.sql` -> error.
-  - [ ] `-1_init.sql` -> error.
-  - [ ] `schema.sql` -> error.
-  - [ ] Duplicate version across files -> error.
-- [ ] Update `create_migration_file`:
-  - [ ] Trim and lowercase the slug.
-  - [ ] Replace whitespace with `_`.
-  - [ ] Reject path separators, `..`, and characters outside `[a-z0-9._-]`.
-  - [ ] Generate a millisecond timestamp version; if it collides, increment until
+- [x] Replace the regex in `lookup.rs` with a parser for:
+  - [x] `<version>_<description>.sql`
+  - [x] `<version>_<description>.up.sql`
+  - [x] `<version>_<description>.down.sql`
+- [x] Parse `version` as `i64`; reject zero and negative values.
+- [x] Parse `description` from the filename; permit `[A-Za-z0-9._-]+`.
+- [x] Add table-driven tests:
+  - [x] `1_init.sql` -> version 1.
+  - [x] `20240101000000_init.sql` -> version `20240101000000`.
+  - [x] `1_add-users.sql` -> description `add-users`.
+  - [x] `1_add.users.sql` -> description `add.users`.
+  - [x] `0_init.sql` -> error.
+  - [x] `-1_init.sql` -> error.
+  - [x] `schema.sql` -> error.
+  - [x] Duplicate version across files -> error.
+- [x] Update `create_migration_file`:
+  - [x] Trim and lowercase the slug.
+  - [x] Replace whitespace with `_`.
+  - [x] Reject path separators, `..`, and characters outside `[a-z0-9._-]`.
+  - [x] Generate a millisecond timestamp version; if it collides, increment until
         unused.
-  - [ ] Default format: one `.sql` file with `-- !UP` and `-- !DOWN`.
-  - [ ] `--reversible` creates `.up.sql` and `.down.sql`.
-- [ ] Add tests:
-  - [ ] `create "Add users table"` creates `*_add_users_table.sql`.
-  - [ ] `create "../../etc/passwd"` exits non-zero and writes nothing.
-  - [ ] Two `create` calls in the same millisecond produce distinct versions.
-- [ ] Add `.gitattributes` at repository root:
-  - [ ] `*.sql text eol=lf`
-- [ ] Add a checksum test that reads a CRLF fixture and asserts it equals the LF
+  - [x] Default format: one `.sql` file with `-- !UP` and `-- !DOWN`.
+  - [x] `--reversible` creates `.up.sql` and `.down.sql`.
+- [x] Add tests:
+  - [x] `create "Add users table"` creates `*_add_users_table.sql`.
+  - [x] `create "../../etc/passwd"` exits non-zero and writes nothing.
+  - [x] Two `create` calls in the same millisecond produce distinct versions.
+- [x] Add `.gitattributes` at repository root:
+  - [x] `*.sql text eol=lf`
+- [x] Add a checksum test that reads a CRLF fixture and asserts it equals the LF
       checksum.
 
 ### 1.3 Metadata v2
 
-- [ ] Add `crates/midas/src/migration/record.rs`.
-  - [ ] Define `pub struct MigrationRecord` with the six SQLx columns plus
+- [x] Add `crates/midas/src/migration/record.rs`.
+  - [x] Define `pub struct MigrationRecord` with the six SQLx columns plus
         `down_checksum: Option<[u8; 48]>`.
-- [ ] Add exact DDL per dialect:
-  - [ ] Postgres:
+- [x] Add exact DDL per dialect:
+  - [x] Postgres:
         `version BIGINT PRIMARY KEY`,
         `description TEXT NOT NULL`,
         `installed_on TIMESTAMPTZ NOT NULL DEFAULT now()`,
@@ -434,7 +434,7 @@ Roadmap reference: WS2, M1; audit sections 9.1–9.3 and 9.5.
         `checksum BYTEA NOT NULL`,
         `execution_time BIGINT NOT NULL`,
         `down_checksum BYTEA`.
-  - [ ] SQLite:
+  - [x] SQLite:
         `version INTEGER PRIMARY KEY`,
         `description TEXT NOT NULL`,
         `installed_on TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
@@ -442,142 +442,142 @@ Roadmap reference: WS2, M1; audit sections 9.1–9.3 and 9.5.
         `checksum BLOB NOT NULL`,
         `execution_time INTEGER NOT NULL`,
         `down_checksum BLOB`.
-- [ ] Implement automatic upgrade from the current one-column tables:
-  - [ ] Detect existing columns with `information_schema.columns` on Postgres
+- [x] Implement automatic upgrade from the current one-column tables:
+  - [x] Detect existing columns with `information_schema.columns` on Postgres
         and `PRAGMA table_info` on SQLite.
-  - [ ] Add missing columns with `ALTER TABLE`.
-  - [ ] Backfill `description = ''`, `success = TRUE`,
+  - [x] Add missing columns with `ALTER TABLE`.
+  - [x] Backfill `description = ''`, `success = TRUE`,
         `checksum = <48 zero bytes>`, `execution_time = -1`.
-  - [ ] Use dialect-correct zero literals: Postgres `decode(repeat('00', 48), 'hex')`,
+  - [x] Use dialect-correct zero literals: Postgres `decode(repeat('00', 48), 'hex')`,
         SQLite `zeroblob(48)`.
-  - [ ] Preserve all existing `migration`/`version` values.
-  - [ ] Treat an all-zero checksum as a legacy/unverified row and skip checksum
+  - [x] Preserve all existing `migration`/`version` values.
+  - [x] Treat an all-zero checksum as a legacy/unverified row and skip checksum
         comparison until `migrate repair` populates it.
-- [ ] Add `Config.metadata_schema` and `Config.metadata_table` support.
-  - [ ] Postgres default: schema `midas`, table `__schema_migrations`.
-  - [ ] SQLite default: no schema, table `__schema_migrations`.
-  - [ ] Test adopting `_sqlx_migrations` by setting both fields.
-- [ ] Add integration tests:
-  - [ ] Fresh database creates the v2 table.
-  - [ ] v1 table with two rows upgrades in place and preserves both rows.
-  - [ ] Custom metadata table name is used.
+- [x] Add `Config.metadata_schema` and `Config.metadata_table` support.
+  - [x] Postgres default: schema `midas`, table `__schema_migrations`.
+  - [x] SQLite default: no schema, table `__schema_migrations`.
+  - [x] Test adopting `_sqlx_migrations` by setting both fields.
+- [x] Add integration tests:
+  - [x] Fresh database creates the v2 table.
+  - [x] v1 table with two rows upgrades in place and preserves both rows.
+  - [x] Custom metadata table name is used.
 
 ### 1.4 Advisory locking
 
-- [ ] Add `crates/midas/src/migration/lock.rs`.
-  - [ ] Define `pub struct LockGuard<'a>` that unlocks on `Drop`.
-- [ ] Postgres:
-  - [ ] Compute the key as
+- [x] Add `crates/midas/src/migration/lock.rs`.
+  - [x] Define `pub struct LockGuard<'a>` that unlocks on `Drop`.
+- [x] Postgres:
+  - [x] Compute the key as
         `crc32(current_database) as i64 * 0x3d32ad9e`, matching SQLx.
-  - [ ] Execute `SELECT pg_advisory_lock($1)`.
-  - [ ] Execute `SELECT pg_advisory_unlock($1)` on drop.
-  - [ ] Add a unit test with a known database name and expected key.
-- [ ] CockroachDB: report `Feature::AdvisoryLocks = false` (already done in Phase 0)
+  - [x] Execute `SELECT pg_advisory_lock($1)`.
+  - [x] Execute `SELECT pg_advisory_unlock($1)` on drop.
+  - [x] Add a unit test with a known database name and expected key.
+- [x] CockroachDB: report `Feature::AdvisoryLocks = false` (already done in Phase 0)
       and require `--no-lock`.
-- [ ] SQLite:
-  - [ ] Acquire `BEGIN IMMEDIATE` for the migration transaction.
-  - [ ] For `-- no-transaction`, use a short `BEGIN IMMEDIATE` only for the metadata
+- [x] SQLite:
+  - [x] Acquire `BEGIN IMMEDIATE` for the migration transaction.
+  - [x] For `-- no-transaction`, use a short `BEGIN IMMEDIATE` only for the metadata
         update and document that DDL still commits immediately in SQLite.
-- [ ] Add `--no-lock` and `Config.lock_timeout`.
-- [ ] Add tests:
-  - [ ] Two concurrent `run` processes apply each migration exactly once.
-  - [ ] A second process times out when the first holds the lock.
-  - [ ] `LockGuard` releases the lock when dropped after a panic (catch with
+- [x] Add `--no-lock` and `Config.lock_timeout`.
+- [x] Add tests:
+  - [x] Two concurrent `run` processes apply each migration exactly once.
+  - [x] A second process times out when the first holds the lock.
+  - [x] `LockGuard` releases the lock when dropped after a panic (catch with
         `std::panic::catch_unwind` in the test).
-  - [ ] `--no-lock` skips locking and still applies migrations.
+  - [x] `--no-lock` skips locking and still applies migrations.
 
 ### 1.5 Transactions, dirty state, and recovery
 
-- [ ] Implement `MigrationStore::apply`:
-  - [ ] Begin a transaction.
-  - [ ] Execute the UP script with `Executor::execute_batch`.
-  - [ ] Insert the metadata row with `success = true` in the same transaction.
-  - [ ] Commit.
-- [ ] Implement `-- no-transaction`:
-  - [ ] Execute the script outside a transaction.
-  - [ ] Insert the metadata row with `success = true` after success.
-  - [ ] On failure, insert or update `success = false`.
-- [ ] Implement `dirty_version()`:
-  - [ ] Return the lowest `version` where `success = false`.
-  - [ ] Refuse to run any migration while dirty.
-- [ ] Implement `migrate resolve`:
-  - [ ] `--applied` marks the dirty version as `success = true`.
-  - [ ] `--rolled-back` deletes the dirty row.
-- [ ] Implement `migrate repair`:
-  - [ ] Recompute `checksum` and `description` for applied versions.
-- [ ] Add integration tests:
-  - [ ] A failing Postgres migration rolls back DDL and leaves a dirty row.
-  - [ ] A failing SQLite migration rolls back DDL and leaves a dirty row.
-  - [ ] `resolve --applied` allows the next migration to run.
-  - [ ] `resolve --rolled-back` allows the same migration to rerun.
-  - [ ] `repair` updates a changed checksum.
+- [x] Implement `MigrationStore::apply`:
+  - [x] Begin a transaction.
+  - [x] Execute the UP script with `Executor::execute_batch`.
+  - [x] Insert the metadata row with `success = true` in the same transaction.
+  - [x] Commit.
+- [x] Implement `-- no-transaction`:
+  - [x] Execute the script outside a transaction.
+  - [x] Insert the metadata row with `success = true` after success.
+  - [x] On failure, insert or update `success = false`.
+- [x] Implement `dirty_version()`:
+  - [x] Return the lowest `version` where `success = false`.
+  - [x] Refuse to run any migration while dirty.
+- [x] Implement `migrate resolve`:
+  - [x] `--applied` marks the dirty version as `success = true`.
+  - [x] `--rolled-back` deletes the dirty row.
+- [x] Implement `migrate repair`:
+  - [x] Recompute `checksum` and `description` for applied versions.
+- [x] Add integration tests:
+  - [x] A failing Postgres migration rolls back DDL and leaves a dirty row.
+  - [x] A failing SQLite migration rolls back DDL and leaves a dirty row.
+  - [x] `resolve --applied` allows the next migration to run.
+  - [x] `resolve --rolled-back` allows the same migration to rerun.
+  - [x] `repair` updates a changed checksum.
 
 ### 1.6 Runner commands
 
-- [ ] Add `crates/midas-cli/src/commands/migrate.rs` with subcommands:
-  - [ ] `run` (alias `up`), with `--target <version>`, `--dry-run`, `--json`.
-  - [ ] `info` (alias `status`), with `--json`.
-  - [ ] `add` (alias `create`), with `--reversible`.
-  - [ ] `revert --to <version>`.
-  - [ ] `baseline --to <version>`.
-  - [ ] `repair`.
-  - [ ] `resolve --applied|--rolled-back`.
-  - [ ] `reset`.
-  - [ ] `down` (all) with `--force`.
-  - [ ] `redo`.
-- [ ] Implement exit code mapping in the CLI.
-- [ ] Add `--json` output schema:
-  - [ ] `{ "version": 1, "applied": [...], "pending": [...], "dirty": null }`.
-  - [ ] Add a snapshot test for the JSON shape.
-- [ ] Add tests:
-  - [ ] `run --target 2` applies only versions 1 and 2.
-  - [ ] `revert --to 1` reverts versions above 1 in reverse order.
-  - [ ] `baseline --to 5` marks 1..5 applied without executing SQL.
-  - [ ] `reset` drops the metadata table and replays all migrations.
-  - [ ] `--dry-run` prints SQL and leaves the database unchanged.
-  - [ ] `info --json` matches the snapshot.
+- [x] Add `crates/midas-cli/src/commands/migrate.rs` with subcommands:
+  - [x] `run` (alias `up`), with `--target <version>`, `--dry-run`, `--json`.
+  - [x] `info` (alias `status`), with `--json`.
+  - [x] `add` (alias `create`), with `--reversible`.
+  - [x] `revert --to <version>`.
+  - [x] `baseline --to <version>`.
+  - [x] `repair`.
+  - [x] `resolve --applied|--rolled-back`.
+  - [x] `reset`.
+  - [x] `down` (all) with `--force`.
+  - [x] `redo`.
+- [x] Implement exit code mapping in the CLI.
+- [x] Add `--json` output schema:
+  - [x] `{ "version": 1, "applied": [...], "pending": [...], "dirty": null }`.
+  - [x] Add a snapshot test for the JSON shape.
+- [x] Add tests:
+  - [x] `run --target 2` applies only versions 1 and 2.
+  - [x] `revert --to 1` reverts versions above 1 in reverse order.
+  - [x] `baseline --to 5` marks 1..5 applied without executing SQL.
+  - [x] `reset` drops the metadata table and replays all migrations.
+  - [x] `--dry-run` prints SQL and leaves the database unchanged.
+  - [x] `info --json` matches the snapshot.
 
 ### 1.7 Embedded migrations
 
-- [ ] Implement `midas-macros::migrate!`.
-  - [ ] Expand to `midas::Migrator::with_migrations(vec![...])`.
-  - [ ] Use `include_str!` with absolute paths for every file in the directory.
-  - [ ] Preserve file order by version.
-  - [ ] Fail compilation on malformed filenames.
-- [ ] Add a `build.rs` helper or documented `cargo:rerun-if-changed=migrations`
+- [x] Implement `midas-macros::migrate!`.
+  - [x] Expand to `midas::Migrator::with_migrations(vec![...])`.
+  - [x] Use `include_str!` with absolute paths for every file in the directory.
+  - [x] Preserve file order by version.
+  - [x] Fail compilation on malformed filenames.
+- [x] Add a `build.rs` helper or documented `cargo:rerun-if-changed=migrations`
       snippet in the test fixture.
-- [ ] Add a fixture crate `crates/midas/tests/fixtures/embedded/`:
-  - [ ] `Cargo.toml` depending on `midas` with `features = ["macros", "sqlite"]`.
-  - [ ] `migrations/1_init.sql`.
-  - [ ] `src/main.rs` running the embedded migrator against `sqlite::memory:`.
-- [ ] Add a CI test that runs the fixture.
+- [x] Add a fixture crate `crates/midas/tests/fixtures/embedded/`:
+  - [x] `Cargo.toml` depending on `midas` with `features = ["macros", "sqlite"]`.
+  - [x] `migrations/1_init.sql`.
+  - [x] `src/main.rs` running the embedded migrator against `sqlite::memory:`.
+- [x] Add a CI test that runs the fixture.
 
 ### 1.8 Multi-statement execution
 
-- [ ] Add `Executor::execute_batch`.
-- [ ] SQLite:
-  - [ ] Replace `Connection::execute` with `Connection::execute_batch`.
-  - [ ] Add a test with three statements in one migration.
-- [ ] Postgres:
-  - [ ] Keep `simple_query` for multi-statement scripts.
-  - [ ] Add a test with three statements.
-- [ ] Add a test with a dollar-quoted function body containing semicolons on Postgres.
+- [x] Add `Executor::execute_batch`.
+- [x] SQLite:
+  - [x] Replace `Connection::execute` with `Connection::execute_batch`.
+  - [x] Add a test with three statements in one migration.
+- [x] Postgres:
+  - [x] Keep `simple_query` for multi-statement scripts.
+  - [x] Add a test with three statements.
+- [x] Add a test with a dollar-quoted function body containing semicolons on Postgres.
 
 ### 1.9 Database lifecycle fixes
 
-- [ ] Postgres `drop_database`:
-  - [ ] Connect to `postgres` (or `template1` when dropping `postgres`).
-  - [ ] Execute `DROP DATABASE IF EXISTS`.
-  - [ ] Add `force_drop_database` that terminates active backends.
-- [ ] SQLite `drop_database`:
-  - [ ] Delete the file and recreate an empty connection.
-- [ ] Add `DatabaseAdmin` tests for create/drop/exists on both dialects.
-- [ ] Add `crates/midas-cli/src/commands/db_lifecycle.rs` with `db create` and
+- [x] Postgres `drop_database`:
+  - [x] Connect to `postgres` (or `template1` when dropping `postgres`).
+  - [x] Execute `DROP DATABASE IF EXISTS`.
+  - [x] Add `force_drop_database` that terminates active backends.
+- [x] SQLite `drop_database`:
+  - [x] Delete the file and recreate an empty connection.
+- [x] Add `DatabaseAdmin` tests for create/drop/exists on both dialects.
+- [x] Add `crates/midas-cli/src/commands/db_lifecycle.rs` with `db create` and
       `db drop` using `DatabaseAdmin`.
-- [ ] Implement `db create --from-migrations <dir>`:
-  - [ ] Create the database if absent.
-  - [ ] Apply all migrations from the directory.
-- [ ] Add tests for `db create --from-migrations` on Postgres and SQLite.
+- [x] Implement `db create --from-migrations <dir>`:
+  - [x] Create the database if absent.
+  - [x] Apply all migrations from the directory.
+- [x] Add tests for `db create --from-migrations` on Postgres and SQLite.
 
 ## Acceptance criteria
 

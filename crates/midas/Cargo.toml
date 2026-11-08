@@ -35,9 +35,9 @@ native-tls = { workspace = true, optional = true }
 postgres = { workspace = true, optional = true }
 postgres-native-tls = { workspace = true, optional = true }
 postgres-rustls = { workspace = true, optional = true }
-regex.workspace = true
 rusqlite = { workspace = true, optional = true }
 serde.workspace = true
+sha2.workspace = true
 thiserror.workspace = true
 toml.workspace = true
 tracing.workspace = true

@@ -23,12 +23,27 @@ use midas::config::Config;
 pub struct Context {
   /// Fully resolved configuration.
   pub config: Config,
+  /// Print SQL instead of executing it.
+  pub dry_run: bool,
+  /// Skip advisory locking.
+  pub no_lock: bool,
 }
 
 impl Context {
   /// Build a context from resolved configuration.
   pub fn new(config: Config) -> Self {
-    Self { config }
+    Self {
+      config,
+      dry_run: false,
+      no_lock: false,
+    }
+  }
+
+  /// Set global runner flags.
+  pub fn with_flags(mut self, dry_run: bool, no_lock: bool) -> Self {
+    self.dry_run = dry_run;
+    self.no_lock = no_lock;
+    self
   }
 }
 
@@ -112,7 +127,7 @@ mod tests {
       .map(|command| command.get_name())
       .collect::<Vec<_>>();
 
-    for expected in ["init", "status", "db", "schema", "generate", "sqlx"] {
+    for expected in ["init", "run", "info", "db", "schema", "generate", "sqlx"] {
       assert!(names.contains(&expected), "missing `{expected}` in {names:?}");
     }
   }

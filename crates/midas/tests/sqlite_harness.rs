@@ -21,9 +21,9 @@ fn sqlite_temp_database_lifecycle() {
 fn migrator_runs_against_sqlite_harness() {
   use midas::commander::Migrator;
   use midas::config::Config;
-  use midas::lookup::{
-    MigrationFile,
-    MigrationFiles,
+  use midas::migration::{
+    Migration,
+    MigrationFormat,
   };
   use midas::sequel::sqlite::Sqlite;
   use midas::sequel::{
@@ -38,30 +38,30 @@ fn migrator_runs_against_sqlite_harness() {
   };
   let backend = sequel::connect(&config).expect("connect sqlite backend");
 
-  let mut migrations = MigrationFiles::new();
-  migrations.insert(
+  let migrations = [Migration::from_parts(
     1,
-    MigrationFile {
-      content_up: Some(vec![
-        "create table users (id integer primary key, name text not null);".to_string(),
-      ]),
-      content_down: Some(vec!["drop table users;".to_string()]),
-      number: 1,
-      filename: "0000000000001_create_users.sql".to_string(),
-    },
-  );
+    "create_users",
+    "create table users (id integer primary key, name text not null);\n",
+    Some("drop table users;\n".to_string()),
+    false,
+    "0000000000001_create_users.sql",
+    MigrationFormat::Midas,
+  )]
+  .into_iter()
+  .map(|migration| (migration.version, migration))
+  .collect();
 
   let mut migrator = Migrator::new(backend, migrations);
-  migrator.up().expect("apply migration");
-  assert_eq!(migrator.applied().expect("applied").len(), 1);
+  migrator.up(None).expect("apply migration");
+  assert_eq!(migrator.info().expect("info").applied, vec![1]);
 
   let mut probe = Sqlite::new(database.url()).expect("reopen sqlite database");
   probe
     .execute("insert into users (name) values ('ada');")
     .expect("schema was applied");
 
-  migrator.revert().expect("revert migration");
-  assert!(migrator.applied().expect("applied").is_empty());
+  migrator.revert_to(Some(0)).expect("revert migration");
+  assert!(migrator.info().expect("info").applied.is_empty());
   assert!(
     probe
       .execute("insert into users (name) values ('grace');")

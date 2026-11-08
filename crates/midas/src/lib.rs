@@ -19,7 +19,6 @@
 pub mod commander;
 pub mod config;
 pub mod error;
-pub mod lookup;
 pub mod migration;
 pub mod sequel;
 
@@ -58,8 +57,11 @@ mod tests {
 
   #[cfg(feature = "macros")]
   #[test]
-  fn migrate_macro_expands_to_empty_vec() {
-    let migrations: Vec<crate::migration::Migration> = crate::migrate!();
-    assert!(migrations.is_empty());
+  fn migrate_macro_embeds_migrations() {
+    let migrations: Vec<crate::migration::Migration> = crate::migrate!("tests/fixtures/embedded/migrations");
+    assert_eq!(migrations.len(), 1);
+    assert_eq!(migrations[0].version, 1);
+    assert!(migrations[0].up.contains("embedded_widgets"));
+    assert!(migrations[0].down.is_some());
   }
 }

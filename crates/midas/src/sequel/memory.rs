@@ -21,21 +21,21 @@ use super::introspect::{
   SchemaSnapshot,
 };
 use super::store::{
-  AppliedMigration,
   Locker,
   MigrationStore,
 };
+use crate::migration::MigrationRecord;
 use crate::Result;
 
 /// In-memory migration metadata store.
 #[derive(Debug, Default)]
 pub struct MemoryStore {
-  applied: BTreeMap<i64, AppliedMigration>,
+  applied: BTreeMap<i64, MigrationRecord>,
 }
 
 impl MemoryStore {
   /// Snapshot of stored rows ordered by version.
-  pub fn snapshot(&self) -> Vec<AppliedMigration> {
+  pub fn snapshot(&self) -> Vec<MigrationRecord> {
     self.applied.values().cloned().collect()
   }
 
@@ -50,16 +50,21 @@ impl MigrationStore for MemoryStore {
     Ok(())
   }
 
-  fn list_applied(&mut self) -> Result<Vec<AppliedMigration>> {
+  fn list_migrations(&mut self) -> Result<Vec<MigrationRecord>> {
     Ok(self.snapshot())
   }
 
-  fn get_last(&mut self) -> Result<Option<AppliedMigration>> {
+  fn get_last(&mut self) -> Result<Option<MigrationRecord>> {
     Ok(self.applied.values().next_back().cloned())
   }
 
-  fn insert(&mut self, migration: &AppliedMigration) -> Result<()> {
-    self.applied.insert(migration.version, migration.clone());
+  fn insert(&mut self, record: &MigrationRecord) -> Result<()> {
+    self.applied.insert(record.version, record.clone());
+    Ok(())
+  }
+
+  fn upsert(&mut self, record: &MigrationRecord) -> Result<()> {
+    self.applied.insert(record.version, record.clone());
     Ok(())
   }
 
@@ -68,17 +73,24 @@ impl MigrationStore for MemoryStore {
     Ok(())
   }
 
-  fn mark_failed(&mut self, version: i64) -> Result<()> {
+  fn set_success(&mut self, version: i64, success: bool) -> Result<()> {
     if let Some(record) = self.applied.get_mut(&version) {
-      record.success = false;
+      record.success = success;
     }
     Ok(())
   }
 
-  fn repair_checksum(&mut self, version: i64, checksum: &str) -> Result<()> {
-    if let Some(record) = self.applied.get_mut(&version) {
-      record.checksum = checksum.to_string();
+  fn repair(&mut self, record: &MigrationRecord) -> Result<()> {
+    if let Some(existing) = self.applied.get_mut(&record.version) {
+      existing.description = record.description.clone();
+      existing.checksum = record.checksum.clone();
+      existing.down_checksum = record.down_checksum.clone();
     }
+    Ok(())
+  }
+
+  fn drop_table(&mut self) -> Result<()> {
+    self.applied.clear();
     Ok(())
   }
 }
@@ -229,28 +241,36 @@ impl MigrationStore for MemoryBackend {
     self.store.ensure_table()
   }
 
-  fn list_applied(&mut self) -> Result<Vec<AppliedMigration>> {
-    self.store.list_applied()
+  fn list_migrations(&mut self) -> Result<Vec<MigrationRecord>> {
+    self.store.list_migrations()
   }
 
-  fn get_last(&mut self) -> Result<Option<AppliedMigration>> {
+  fn get_last(&mut self) -> Result<Option<MigrationRecord>> {
     self.store.get_last()
   }
 
-  fn insert(&mut self, migration: &AppliedMigration) -> Result<()> {
-    self.store.insert(migration)
+  fn insert(&mut self, record: &MigrationRecord) -> Result<()> {
+    self.store.insert(record)
+  }
+
+  fn upsert(&mut self, record: &MigrationRecord) -> Result<()> {
+    self.store.upsert(record)
   }
 
   fn delete(&mut self, version: i64) -> Result<()> {
     self.store.delete(version)
   }
 
-  fn mark_failed(&mut self, version: i64) -> Result<()> {
-    self.store.mark_failed(version)
+  fn set_success(&mut self, version: i64, success: bool) -> Result<()> {
+    self.store.set_success(version, success)
   }
 
-  fn repair_checksum(&mut self, version: i64, checksum: &str) -> Result<()> {
-    self.store.repair_checksum(version, checksum)
+  fn repair(&mut self, record: &MigrationRecord) -> Result<()> {
+    self.store.repair(record)
+  }
+
+  fn drop_table(&mut self) -> Result<()> {
+    self.store.drop_table()
   }
 }
 
@@ -328,20 +348,22 @@ impl DatabaseAdmin for MemoryBackend {
 mod tests {
   use super::*;
 
+  fn record(version: i64) -> MigrationRecord {
+    MigrationRecord::applied(version, "init", vec![7; 48], None, 42)
+  }
+
   #[test]
   fn store_tracks_applied_migrations() {
     let mut store = MemoryStore::default();
-    store
-      .insert(&AppliedMigration::applied(1, "init", "checksum"))
-      .expect("insert");
+    store.insert(&record(1)).expect("insert");
     assert!(store.contains(1));
     assert_eq!(store.get_last().expect("last").map(|row| row.version), Some(1));
 
-    store.mark_failed(1).expect("mark failed");
+    store.set_success(1, false).expect("mark failed");
     assert!(!store.snapshot()[0].success);
 
-    store.repair_checksum(1, "new").expect("repair");
-    assert_eq!(store.snapshot()[0].checksum, "new");
+    store.repair(&record(1)).expect("repair");
+    assert_eq!(store.snapshot()[0].checksum, vec![7; 48]);
 
     store.delete(1).expect("delete");
     assert!(!store.contains(1));

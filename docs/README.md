@@ -65,16 +65,19 @@ The command will execute all **special** (up) SQL migrations files to the databa
 Here are the available subcommands:
 
 ```shell
-create    Creates a timestamped migration file
-down      Remove all applied migrations
-drop      Drops everything inside the database (NOTE: must have create/drop privilege)
-redo      Redo the last migration
-revert    Reverts the last migration
-init      Setups and creates initial file directory and env
-status    Checks the status of the migration
-up        Apply all non-applied migrations
-faker     Generate fake data for the database (WIP)
-setup     Setup the database (WIP)
+add       Create a timestamped migration file
+baseline  Mark migrations up to a version as applied without running SQL
+db        Database lifecycle commands
+down      Revert every applied migration
+info      Show applied, pending, and dirty migrations
+init      Set up a midas project
+list      List migration files without a database
+redo      Revert and re-apply the last migration
+repair    Recompute checksums for applied migrations
+reset     Drop metadata and replay every migration
+resolve   Resolve a dirty migration
+revert    Revert applied migrations
+run       Apply pending migrations
 ```
 
 For more info see `--help`.
