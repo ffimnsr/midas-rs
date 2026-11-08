@@ -27,7 +27,6 @@ indoc = "2"
 mk_ext_prettytable = { version = "0.11.0", default-features = false, features = ["win_crlf"] }
 midas = { version = "0.7.6", path = "crates/midas", default-features = false }
 midas-macros = { version = "0.7.6", path = "crates/midas-macros" }
-mysql = { version = "28.0", default-features = false, features = ["minimal-rust"] }
 native-tls = "0.2"
 postgres = "0.19"
 postgres-native-tls = "0.5.3"
@@ -40,7 +39,7 @@ sha2 = "0.10"
 snapbox = "0.6.21"
 tempfile = "3.15"
 testcontainers = { version = "0.27", features = ["blocking"] }
-testcontainers-modules = { version = "0.15", default-features = false, features = ["postgres", "mysql"] }
+testcontainers-modules = { version = "0.15", default-features = false, features = ["postgres"] }
 thiserror = "1.0.69"
 toml = "0.8"
 tracing = "0.1"

@@ -19,22 +19,12 @@ tasks:
           -e POSTGRES_DB=startup \
           -d postgres:17-alpine
     description: Run the postgres container
-  run-mysql:
+  run-cockroach:
     commands:
       - command: |
-          podman run -it --rm --name mysql -p 3306:3306 \
-          -e MYSQL_ROOT_PASSWORD=mysql \
-          -e MYSQL_DATABASE=startup \
-          -d mysql:9-oracle
-    description: Run the mysql container
-  run-mariadb:
-    commands:
-      - command: |
-          podman run -it --rm --name mariadb -p 3306:3306 \
-          -e MARIADB_ROOT_PASSWORD=mariadb \
-          -e MARIADB_DATABASE=startup \
-          -d mariadb:10
-    description: Run the mariadb container
+          podman run -it --rm --name cockroach -p 26257:26257 -p 8080:8080 \
+          -d cockroachdb/cockroach:v24.3.0 start-single-node --insecure
+    description: Run the cockroachdb container
   run-mssql:
     commands:
       - command: |

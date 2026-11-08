@@ -35,7 +35,6 @@ fn driver_features_propagate_to_the_library() {
 
   for (feature, dependency_feature) in [
     ("postgres", "midas/postgres"),
-    ("mysql", "midas/mysql"),
     ("sqlite", "midas/sqlite"),
     ("macros", "midas/macros"),
   ] {
@@ -50,6 +49,25 @@ fn driver_features_propagate_to_the_library() {
       "`{feature}` must enable `{dependency_feature}`"
     );
   }
+}
+
+#[test]
+fn mysql_is_removed_from_the_cli_and_workspace() {
+  let cli = cli_manifest();
+  let features = cli["features"].as_table().expect("feature table");
+  assert!(
+    !features.contains_key("mysql"),
+    "`mysql` feature must stay removed"
+  );
+
+  let workspace = workspace_manifest();
+  let dependencies = workspace["workspace"]["dependencies"]
+    .as_table()
+    .expect("workspace dependency table");
+  assert!(
+    !dependencies.contains_key("mysql"),
+    "`mysql` must not be a workspace dependency"
+  );
 }
 
 #[test]

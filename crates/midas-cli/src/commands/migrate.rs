@@ -16,6 +16,7 @@ use clap::{
 use console::style;
 use midas::commander::Migrator;
 use midas::config::Config;
+use midas::sequel::DatabaseEngine;
 use midas::{
   lookup,
   sequel,
@@ -241,7 +242,6 @@ fn project_template(config: &Config) -> String {
   let dialect = configured_dialect(config);
   let (default_schema, metadata_schema) = match dialect {
     "sqlite" => ("default_schema = \"main\"\n".to_string(), String::new()),
-    "mysql" => (String::new(), String::new()),
     _ => (
       "default_schema = \"public\"\n".to_string(),
       "metadata_schema = \"midas\"\n".to_string(),
@@ -271,18 +271,12 @@ ignore_objects = []
 }
 
 fn configured_dialect(config: &Config) -> &'static str {
-  match config.database_url.as_deref() {
-    Some(url) if url.starts_with("mysql") => "mysql",
-    Some(url)
-      if url.starts_with("sqlite")
-        || url.starts_with("file")
-        || url.starts_with('.')
-        || url.starts_with('/') =>
-    {
-      "sqlite"
-    },
-    _ => "postgres",
-  }
+  config
+    .database_url
+    .as_deref()
+    .and_then(|url| DatabaseEngine::from_url(url).ok())
+    .map(DatabaseEngine::dialect_name)
+    .unwrap_or("postgres")
 }
 
 fn schema_template() -> &'static str {
@@ -326,13 +320,13 @@ mod tests {
     assert!(template.contains("dialect = \"sqlite\""));
     assert!(!template.contains("metadata_schema"));
 
-    let mysql = Config {
-      database_url: Some("mysql://root@localhost/app".to_string()),
+    let cockroach = Config {
+      database_url: Some("cockroachdb://root@localhost:26257/app".to_string()),
       ..Config::default()
     };
-    let template = project_template(&mysql);
-    assert!(template.contains("dialect = \"mysql\""));
-    assert!(!template.contains("default_schema"));
+    let template = project_template(&cockroach);
+    assert!(template.contains("dialect = \"postgres\""));
+    assert!(template.contains("metadata_schema = \"midas\""));
   }
 
   #[test]

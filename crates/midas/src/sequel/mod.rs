@@ -7,14 +7,10 @@ pub mod introspect;
 pub mod memory;
 pub mod store;
 
-#[cfg(feature = "mysql")]
-pub mod mysql;
 #[cfg(feature = "postgres")]
 pub mod postgres;
 #[cfg(feature = "sqlite")]
 pub mod sqlite;
-
-use url::Url;
 
 pub use admin::DatabaseAdmin;
 pub use dialect::{
@@ -41,6 +37,67 @@ use crate::{
   Result,
 };
 
+/// URL schemes accepted by [`DatabaseEngine::from_scheme`].
+const SUPPORTED_SCHEMES: &[&str] = &[
+  "postgres",
+  "postgresql",
+  "cockroach",
+  "cockroachdb",
+  "sqlite",
+  "sqlite3",
+  "file",
+];
+
+/// Database engine selected by a connection URL.
+///
+/// CockroachDB uses the Postgres wire protocol and the Postgres SQL dialect.
+/// Keep it as a separate engine so capability checks (for example, advisory
+/// locks) can distinguish it from a regular Postgres server.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DatabaseEngine {
+  /// Postgres or a Postgres-wire compatible server.
+  Postgres,
+  /// CockroachDB, served by the Postgres wire protocol.
+  CockroachDb,
+  /// SQLite, including local filesystem paths without a URL scheme.
+  Sqlite,
+}
+
+impl DatabaseEngine {
+  /// Resolve an engine from a database URL or a local SQLite path.
+  pub fn from_url(raw: &str) -> Result<Self> {
+    // Local paths are treated as SQLite databases without an explicit scheme.
+    if raw.starts_with('.') || raw.starts_with('/') {
+      return Ok(Self::Sqlite);
+    }
+
+    let url =
+      url::Url::parse(raw).map_err(|error| Error::config(format!("invalid database URL: {error}")))?;
+    Self::from_scheme(url.scheme())
+  }
+
+  /// Resolve an engine from a URL scheme.
+  pub fn from_scheme(scheme: &str) -> Result<Self> {
+    match scheme.to_ascii_lowercase().as_str() {
+      "postgres" | "postgresql" => Ok(Self::Postgres),
+      "cockroach" | "cockroachdb" => Ok(Self::CockroachDb),
+      "sqlite" | "sqlite3" | "file" => Ok(Self::Sqlite),
+      other => Err(Error::config(format!(
+        "unsupported database scheme `{other}`; expected one of {}",
+        SUPPORTED_SCHEMES.join(", ")
+      ))),
+    }
+  }
+
+  /// Canonical dialect name used in generated configuration.
+  pub fn dialect_name(self) -> &'static str {
+    match self {
+      Self::Postgres | Self::CockroachDb => "postgres",
+      Self::Sqlite => "sqlite",
+    }
+  }
+}
+
 /// Composite capability set required by the migration runner.
 pub trait Backend: Executor + MigrationStore + Locker + DatabaseAdmin + Dialect + Introspector {}
 
@@ -50,17 +107,9 @@ impl<T> Backend for T where T: Executor + MigrationStore + Locker + DatabaseAdmi
 pub fn connect(config: &Config) -> Result<Box<dyn Backend>> {
   let url = config.require_database_url()?.to_string();
 
-  // Local paths are treated as SQLite databases without an explicit scheme.
-  if url.starts_with('.') || url.starts_with('/') {
-    return connect_sqlite(config, &url);
-  }
-
-  let parsed = Url::parse(&url).map_err(|error| Error::config(format!("invalid database URL: {error}")))?;
-  match parsed.scheme().to_ascii_lowercase().as_str() {
-    "postgres" | "postgresql" => connect_postgres(config),
-    "mysql" => connect_mysql(config),
-    "sqlite" | "sqlite3" | "file" => connect_sqlite(config, &url),
-    other => Err(Error::config(format!("unsupported database scheme `{other}`"))),
+  match DatabaseEngine::from_url(&url)? {
+    DatabaseEngine::Postgres | DatabaseEngine::CockroachDb => connect_postgres(config),
+    DatabaseEngine::Sqlite => connect_sqlite(config, &url),
   }
 }
 
@@ -72,16 +121,6 @@ fn connect_postgres(config: &Config) -> Result<Box<dyn Backend>> {
 #[cfg(not(feature = "postgres"))]
 fn connect_postgres(_: &Config) -> Result<Box<dyn Backend>> {
   Err(Error::unsupported_feature("postgres", "driver"))
-}
-
-#[cfg(feature = "mysql")]
-fn connect_mysql(config: &Config) -> Result<Box<dyn Backend>> {
-  Ok(Box::new(mysql::Mysql::with_config(config)?))
-}
-
-#[cfg(not(feature = "mysql"))]
-fn connect_mysql(_: &Config) -> Result<Box<dyn Backend>> {
-  Err(Error::unsupported_feature("mysql", "driver"))
 }
 
 #[cfg(feature = "sqlite")]
@@ -97,6 +136,51 @@ fn connect_sqlite(_: &Config, _: &str) -> Result<Box<dyn Backend>> {
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[test]
+  fn engines_are_resolved_from_schemes() {
+    for (scheme, expected) in [
+      ("postgres", DatabaseEngine::Postgres),
+      ("POSTGRESQL", DatabaseEngine::Postgres),
+      ("cockroach", DatabaseEngine::CockroachDb),
+      ("cockroachdb", DatabaseEngine::CockroachDb),
+      ("sqlite", DatabaseEngine::Sqlite),
+      ("sqlite3", DatabaseEngine::Sqlite),
+      ("file", DatabaseEngine::Sqlite),
+    ] {
+      assert_eq!(
+        DatabaseEngine::from_scheme(scheme).expect("known scheme"),
+        expected
+      );
+    }
+  }
+
+  #[test]
+  fn local_paths_and_urls_resolve_to_engines() {
+    assert_eq!(
+      DatabaseEngine::from_url("./app.db3").expect("local path"),
+      DatabaseEngine::Sqlite
+    );
+    assert_eq!(
+      DatabaseEngine::from_url("cockroachdb://root@localhost:26257/app").expect("url"),
+      DatabaseEngine::CockroachDb
+    );
+  }
+
+  #[test]
+  fn unknown_schemes_report_the_supported_list() {
+    let error = DatabaseEngine::from_scheme("mysql").expect_err("mysql is unsupported");
+    let message = error.to_string();
+    assert!(message.contains("unsupported database scheme `mysql`"));
+    assert!(message.contains("postgres"));
+    assert!(message.contains("sqlite"));
+  }
+
+  #[test]
+  fn cockroach_uses_the_postgres_dialect_name() {
+    assert_eq!(DatabaseEngine::CockroachDb.dialect_name(), "postgres");
+    assert_eq!(DatabaseEngine::Sqlite.dialect_name(), "sqlite");
+  }
 
   fn assert_object_safe(
     _: &dyn Executor,

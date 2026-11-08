@@ -16,12 +16,34 @@ fn default_features_enable_every_driver() {
     .filter_map(toml::Value::as_str)
     .collect::<Vec<_>>();
 
-  for feature in ["postgres", "mysql", "sqlite"] {
+  for feature in ["postgres", "sqlite"] {
     assert!(
       default.contains(&feature),
       "default features must include `{feature}`"
     );
   }
+}
+
+#[test]
+fn mysql_backend_is_removed() {
+  let manifest = manifest();
+  let features = manifest["features"].as_table().expect("feature table");
+  let dependencies = manifest["dependencies"].as_table().expect("dependency table");
+
+  assert!(
+    !features.contains_key("mysql"),
+    "`mysql` feature must stay removed"
+  );
+  assert!(
+    !dependencies.contains_key("mysql"),
+    "`mysql` must not be a dependency"
+  );
+  assert!(
+    !std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+      .join("src/sequel/mysql.rs")
+      .exists(),
+    "the MySQL backend module must stay removed"
+  );
 }
 
 #[test]
@@ -65,7 +87,6 @@ fn driver_features_are_wired_to_optional_dependencies() {
 
   for (feature, dependency) in [
     ("postgres", "postgres"),
-    ("mysql", "mysql"),
     ("sqlite", "rusqlite"),
     ("macros", "midas-macros"),
   ] {

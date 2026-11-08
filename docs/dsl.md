@@ -24,7 +24,7 @@ The recommended shape is:
   a DSL that tries to model every exotic object becomes unusable. `[[raw]]` blocks
   are first-class and dialect-gated.
 - **A compiler pipeline:** parse → resolve → validate → normalize → diff → plan →
-  emit. The IR is dialect-neutral so MySQL/SQLite/CockroachDB can be added later.
+  emit. The IR is dialect-neutral so SQLite/CockroachDB can be added later.
 
 The DSL is *not* an ORM client. It does not generate query APIs, typed row structs, or
 runtime navigation. It generates and verifies schema DDL.
@@ -42,7 +42,7 @@ runtime navigation. It generates and verifies schema DDL.
 5. Cover Postgres-specific features used by real apps: extensions, enums, composite
    types, generated columns, partial/expression indexes, RLS policies, triggers,
    functions, roles and grants, partitioning.
-6. Keep the door open for MySQL, MariaDB, SQLite and CockroachDB.
+6. Keep the door open for SQLite and CockroachDB.
 7. Allow gradual adoption: introspect an existing database into the DSL (`db pull`),
    or write the DSL first and generate an initial migration.
 
@@ -1371,7 +1371,6 @@ src/schema/
   emit/
     mod.rs            # Dialect trait
     postgres.rs       # Postgres DDL
-    mysql.rs          # later
     sqlite.rs         # later
   introspect/
     mod.rs            # Database -> Schema IR
@@ -1766,21 +1765,21 @@ Portability rules:
   not silently ignored.
 - `[[raw]]` blocks can be gated by `dialects`.
 - Store dialect-specific knobs in `dialect_options` rather than polluting the core IR.
-- v1 ships Postgres only; MySQL/SQLite emitters can follow.
+- v1 ships Postgres only; SQLite emitters can follow.
 
 Known differences to design around:
 
-| Feature | Postgres | MySQL | SQLite |
-| --- | --- | --- | --- |
-| Schemas | yes | database ≈ schema | attached DB |
-| Enums | native | inline enum | check constraint |
-| Composite types | native | no | no |
-| Arrays | native | no | no |
-| Partial indexes | yes | no | yes |
-| Expression indexes | yes | generated columns | yes |
-| RLS | yes | no | no |
-| Identity | `GENERATED ... AS IDENTITY` | `AUTO_INCREMENT` | `AUTOINCREMENT` |
-| `ALTER COLUMN` | rich | limited | limited; often table rebuild |
+| Feature | Postgres | SQLite |
+| --- | --- | --- |
+| Schemas | yes | attached DB |
+| Enums | native | check constraint |
+| Composite types | native | no |
+| Arrays | native | no |
+| Partial indexes | yes | yes |
+| Expression indexes | yes | yes |
+| RLS | yes | no |
+| Identity | `GENERATED ... AS IDENTITY` | `AUTOINCREMENT` |
+| `ALTER COLUMN` | rich | limited; often table rebuild |
 
 ---
 
@@ -1841,7 +1840,7 @@ Known differences to design around:
 - `schema fmt` (deterministic TOML formatting).
 - `db push`.
 - Seeds/faker integration.
-- MySQL and SQLite emitters for the core subset.
+- SQLite emitter for the core subset.
 - Documentation, examples, error-message review.
 
 ---

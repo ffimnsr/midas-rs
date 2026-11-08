@@ -1,5 +1,11 @@
 # Roadmap: Win Migrations and Schema, Interoperate with SQLx
 
+> **Historical planning document.** The canonical backlog lives in
+> [ISSUES.md](ISSUES.md). Database scope is intentionally narrow: Postgres
+> (including CockroachDB and Postgres-wire compatible servers) and SQLite.
+> MySQL and MariaDB are no longer supported, so MySQL items below are retained
+> only as design history.
+>
 > Status: accepted direction.
 >
 > Target: Midas owns the schema and migration lifecycle. SQLx owns runtime queries.
@@ -26,7 +32,7 @@ evolve a database schema, and by producing artifacts SQLx can consume.**
 
 - No async connection pool, query builder, or ORM runtime.
 - No `query!`-style compile-time checking that requires a live database.
-- No MSSQL, Oracle, or Cassandra drivers.
+- No MSSQL, Oracle, Cassandra, MySQL, or MariaDB drivers.
 - No scripting DSL (Lua/Starlark) and no YAML front-end yet.
 - No hosted service.
 

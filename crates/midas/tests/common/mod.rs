@@ -108,23 +108,7 @@ pub fn run_postgres() -> TempDb {
   }
 }
 
-/// Start a temporary MySQL container.
-#[cfg(feature = "mysql")]
-pub fn run_mysql() -> TempDb {
-  use testcontainers::runners::SyncRunner as _;
-  use testcontainers_modules::mysql::Mysql;
-
-  let container = Mysql::default().start().expect("start mysql test container");
-  let host = container.get_host().expect("mysql container host");
-  let port = container.get_host_port_ipv4(3306).expect("mysql container port");
-  TempDb {
-    url: format!("mysql://root@{host}:{port}/test"),
-    path: None,
-    _directory: None,
-    _container: Some(Box::new(container)),
-  }
-}
-
+/// Start a temporary PostgreSQL container.
 #[cfg(test)]
 mod tests {
   use super::*;

@@ -14,11 +14,10 @@ readme = "../../README.md"
 default-run = "midas"
 
 [features]
-default = ["cli", "postgres", "mysql", "sqlite"]
+default = ["cli", "postgres", "sqlite"]
 # Marker feature used by `required-features`; any driver enables it.
 cli = []
 postgres = ["cli", "midas/postgres"]
-mysql = ["cli", "midas/mysql"]
 sqlite = ["cli", "midas/sqlite"]
 macros = ["midas/macros"]
 tls-native-tls = ["midas/tls-native-tls"]

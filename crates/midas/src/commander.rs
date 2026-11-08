@@ -26,6 +26,7 @@ use crate::lookup::{
 use crate::sequel::{
   AppliedMigration,
   Backend,
+  DatabaseEngine,
 };
 use crate::{
   progress_style,
@@ -282,15 +283,11 @@ fn record_applied(
 }
 
 fn database_name(db_url: &str) -> Result<String> {
-  if db_url.starts_with('.') || db_url.starts_with('/') {
+  if DatabaseEngine::from_url(db_url)? == DatabaseEngine::Sqlite {
     return Ok("sqlite".to_string());
   }
 
   let url = Url::parse(db_url).map_err(|error| Error::config(format!("invalid database URL: {error}")))?;
-  if url.scheme() == "file" || url.scheme() == "sqlite" || url.scheme() == "sqlite3" {
-    return Ok("sqlite".to_string());
-  }
-
   url
     .path_segments()
     .and_then(|mut segments| segments.next_back())

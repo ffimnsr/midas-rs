@@ -56,7 +56,6 @@ jobs:
           - ""
           - "--no-default-features"
           - "--no-default-features --features postgres"
-          - "--no-default-features --features mysql"
           - "--no-default-features --features sqlite"
           - "--all-features"
     steps:

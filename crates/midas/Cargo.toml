@@ -16,15 +16,11 @@ readme = "../../README.md"
 name = "midas"
 
 [features]
-default = ["postgres", "mysql", "sqlite"]
+default = ["postgres", "sqlite"]
 postgres = ["dep:postgres"]
-mysql = ["dep:mysql"]
 sqlite = ["dep:rusqlite"]
 macros = ["dep:midas-macros"]
-tls-native-tls = ["dep:postgres-native-tls", "dep:native-tls", "mysql?/native-tls"]
-# The `mysql` crate enables both TLS backends additively and fails to build when
-# `native-tls` and `rustls-tls` are active together, so MySQL follows the
-# native-tls backend. `--all-features` must stay buildable.
+tls-native-tls = ["dep:postgres-native-tls", "dep:native-tls"]
 tls-rustls = ["dep:postgres-rustls"]
 openssl-vendored = ["tls-native-tls", "native-tls/vendored"]
 
@@ -35,7 +31,6 @@ indicatif.workspace = true
 indoc.workspace = true
 midas-macros = { workspace = true, optional = true }
 mk_ext_prettytable.workspace = true
-mysql = { workspace = true, optional = true }
 native-tls = { workspace = true, optional = true }
 postgres = { workspace = true, optional = true }
 postgres-native-tls = { workspace = true, optional = true }

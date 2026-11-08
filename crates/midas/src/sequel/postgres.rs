@@ -30,6 +30,7 @@ use super::store::{
   Locker,
   MigrationStore,
 };
+use super::DatabaseEngine;
 use crate::config::{
   Config,
   DEFAULT_LOCK_TIMEOUT,
@@ -42,6 +43,30 @@ use crate::{
 
 const DEFAULT_METADATA_SCHEMA: &str = "midas";
 
+/// URL schemes that identify Postgres-wire compatible engines.
+const POSTGRES_SCHEME_ALIASES: &[&str] = &["cockroach", "cockroachdb"];
+
+/// Engine flavor behind a Postgres-wire connection.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PostgresFlavor {
+  Postgres,
+  CockroachDb,
+}
+
+impl PostgresFlavor {
+  fn supports(self, feature: Feature) -> bool {
+    match feature {
+      Feature::Schemas
+      | Feature::TransactionalDdl
+      | Feature::AlterColumnType
+      | Feature::MultiStatementBatch
+      | Feature::ReturningClause => true,
+      // CockroachDB does not implement session-level advisory locks.
+      Feature::AdvisoryLocks => self == Self::Postgres,
+    }
+  }
+}
+
 /// PostgreSQL connection implementing every backend capability.
 pub struct Postgres {
   client: Client,
@@ -49,6 +74,7 @@ pub struct Postgres {
   metadata_table: String,
   lock_timeout: Duration,
   lock_key: i64,
+  flavor: PostgresFlavor,
 }
 
 impl Postgres {
@@ -91,13 +117,18 @@ impl Postgres {
       .filter(|name| !name.is_empty())
       .ok_or_else(|| Error::config("database name not found in URL"))?;
 
-    let client = Client::connect(database_url, NoTls)?;
+    // The `postgres` crate only accepts the `postgres`/`postgresql` schemes,
+    // so normalize CockroachDB aliases before connecting.
+    let connection_url = normalize_database_url(database_url)?;
+    let flavor = flavor_for_engine(DatabaseEngine::from_scheme(url.scheme())?)?;
+    let client = Client::connect(&connection_url, NoTls)?;
     let mut backend = Self {
       client,
       metadata_schema: metadata_schema.to_string(),
       metadata_table: metadata_table.to_string(),
       lock_timeout,
       lock_key: lock_key(),
+      flavor,
     };
     backend.ensure_table()?;
     Ok(backend)
@@ -248,6 +279,12 @@ impl MigrationStore for Postgres {
 
 impl Locker for Postgres {
   fn lock(&mut self) -> Result<()> {
+    if !self.flavor.supports(Feature::AdvisoryLocks) {
+      return Err(Error::Unsupported(
+        "CockroachDB does not support session-level advisory locks".to_string(),
+      ));
+    }
+
     let started = Instant::now();
     loop {
       let row = self
@@ -270,6 +307,12 @@ impl Locker for Postgres {
   }
 
   fn unlock(&mut self) -> Result<()> {
+    if !self.flavor.supports(Feature::AdvisoryLocks) {
+      return Err(Error::Unsupported(
+        "CockroachDB does not support session-level advisory locks".to_string(),
+      ));
+    }
+
     self
       .client
       .execute("select pg_advisory_unlock($1)", &[&self.lock_key])?;
@@ -295,15 +338,7 @@ impl Dialect for Postgres {
   }
 
   fn supports(&self, feature: Feature) -> bool {
-    matches!(
-      feature,
-      Feature::Schemas
-        | Feature::TransactionalDdl
-        | Feature::AdvisoryLocks
-        | Feature::AlterColumnType
-        | Feature::MultiStatementBatch
-        | Feature::ReturningClause
-    )
+    self.flavor.supports(feature)
   }
 }
 
@@ -354,6 +389,28 @@ fn lock_key() -> i64 {
   i64::from(crc::Crc::<u32>::new(&crc::CRC_32_ISO_HDLC).checksum(b"midas-migrator"))
 }
 
+/// Rewrite CockroachDB scheme aliases to a scheme the `postgres` crate accepts.
+fn normalize_database_url(raw: &str) -> Result<String> {
+  let mut url = Url::parse(raw).map_err(|error| Error::config(format!("invalid database URL: {error}")))?;
+  let scheme = url.scheme().to_ascii_lowercase();
+  if !POSTGRES_SCHEME_ALIASES.contains(&scheme.as_str()) {
+    return Ok(raw.to_string());
+  }
+
+  url
+    .set_scheme("postgresql")
+    .map_err(|_| Error::config(format!("unsupported database scheme `{scheme}`")))?;
+  Ok(url.to_string())
+}
+
+fn flavor_for_engine(engine: DatabaseEngine) -> Result<PostgresFlavor> {
+  match engine {
+    DatabaseEngine::Postgres => Ok(PostgresFlavor::Postgres),
+    DatabaseEngine::CockroachDb => Ok(PostgresFlavor::CockroachDb),
+    DatabaseEngine::Sqlite => Err(Error::config("SQLite URL passed to the Postgres backend")),
+  }
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;
@@ -368,5 +425,48 @@ mod tests {
   fn quoting_matches_postgres_rules() {
     assert_eq!(quote_ident_with("a\"b", '"'), "\"a\"\"b\"");
     assert_eq!(quote_literal_with("a'b", '\''), "'a''b'");
+  }
+
+  #[test]
+  fn cockroach_schemes_are_normalized() {
+    for alias in POSTGRES_SCHEME_ALIASES {
+      let url = format!("{alias}://user:pass@localhost:26257/app?sslmode=disable");
+      let normalized = normalize_database_url(&url).expect("alias is accepted");
+      assert!(normalized.starts_with("postgresql://"), "got `{normalized}`");
+      assert!(
+        normalized.contains("user:pass@localhost:26257/app"),
+        "host and path must survive normalization: `{normalized}`"
+      );
+      assert!(normalized.contains("?sslmode=disable"));
+    }
+  }
+
+  #[test]
+  fn cockroach_disables_advisory_locks() {
+    let engine = DatabaseEngine::from_scheme("cockroachdb").expect("known scheme");
+    let flavor = flavor_for_engine(engine).expect("cockroach flavor");
+    assert_eq!(flavor, PostgresFlavor::CockroachDb);
+    assert!(!flavor.supports(Feature::AdvisoryLocks));
+    assert!(flavor.supports(Feature::Schemas));
+  }
+
+  #[test]
+  fn postgres_supports_advisory_locks() {
+    let engine = DatabaseEngine::from_scheme("postgres").expect("known scheme");
+    let flavor = flavor_for_engine(engine).expect("postgres flavor");
+    assert_eq!(flavor, PostgresFlavor::Postgres);
+    assert!(flavor.supports(Feature::AdvisoryLocks));
+  }
+
+  #[test]
+  fn sqlite_urls_are_rejected_by_the_postgres_backend() {
+    let engine = DatabaseEngine::from_scheme("sqlite").expect("known scheme");
+    assert!(flavor_for_engine(engine).is_err());
+  }
+
+  #[test]
+  fn postgres_urls_are_not_rewritten() {
+    let url = "postgres://user:pass@localhost/app";
+    assert_eq!(normalize_database_url(url).expect("valid url"), url);
   }
 }

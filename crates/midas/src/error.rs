@@ -123,13 +123,6 @@ impl From<postgres::Error> for Error {
   }
 }
 
-#[cfg(feature = "mysql")]
-impl From<mysql::Error> for Error {
-  fn from(error: mysql::Error) -> Self {
-    Self::Database(Box::new(error))
-  }
-}
-
 #[cfg(feature = "sqlite")]
 impl From<rusqlite::Error> for Error {
   fn from(error: rusqlite::Error) -> Self {

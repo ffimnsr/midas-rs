@@ -17,6 +17,7 @@ use serde::{
 };
 use url::Url;
 
+use crate::sequel::DatabaseEngine;
 use crate::{
   Error,
   Result,
@@ -36,8 +37,6 @@ pub const DEFAULT_LOCK_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Placeholder written instead of a real password when redacting URLs.
 pub const REDACTED: &str = "***";
-
-const ALLOWED_SCHEMES: &[&str] = &["postgres", "postgresql", "mysql", "sqlite", "sqlite3", "file"];
 
 /// How migrations are wrapped in transactions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -494,20 +493,9 @@ fn validate_database_url(raw: &str) -> Result<()> {
     return Err(Error::config("database URL must not be empty"));
   }
 
-  // Local SQLite paths are accepted without a URL scheme.
-  if raw.starts_with('.') || raw.starts_with('/') {
-    return Ok(());
-  }
-
-  let url = Url::parse(raw).map_err(|error| Error::config(format!("invalid database URL: {error}")))?;
-  let scheme = url.scheme().to_ascii_lowercase();
-  if !ALLOWED_SCHEMES.contains(&scheme.as_str()) {
-    return Err(Error::config(format!(
-      "unsupported database scheme `{scheme}`; expected one of {}",
-      ALLOWED_SCHEMES.join(", ")
-    )));
-  }
-
+  // Delegates scheme handling to the engine resolver so configuration and
+  // driver selection can never disagree about supported URLs.
+  DatabaseEngine::from_url(raw)?;
   Ok(())
 }
 
@@ -656,6 +644,27 @@ transaction = "none"
     let error = config.validate().expect_err("invalid scheme must fail");
     assert!(matches!(error, Error::Config(_)));
     assert!(error.to_string().contains("unsupported database scheme `oracle`"));
+  }
+
+  #[test]
+  fn cockroach_schemes_are_accepted() {
+    for alias in ["cockroach", "cockroachdb"] {
+      let config = Config {
+        database_url: Some(format!("{alias}://root@localhost:26257/app")),
+        ..Config::default()
+      };
+      config.validate().expect("cockroach alias is valid");
+    }
+  }
+
+  #[test]
+  fn mysql_is_no_longer_supported() {
+    let config = Config {
+      database_url: Some("mysql://root@localhost/app".to_string()),
+      ..Config::default()
+    };
+    let error = config.validate().expect_err("mysql must be rejected");
+    assert!(error.to_string().contains("unsupported database scheme `mysql`"));
   }
 
   #[test]

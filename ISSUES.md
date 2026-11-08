@@ -33,12 +33,14 @@ These are settled. Implement them as written.
 - Metadata shape: SQLx-compatible columns.
 - SQLx target: 0.9.x, file/metadata interop only; no SQLx production dependency.
 - Workspace: `midas` library, `midas-cli` binaries, `midas-macros` proc macros.
+- Database scope: Postgres and Postgres-wire compatible servers (CockroachDB and
+  managed Postgres), plus SQLite. MySQL and MariaDB are out of scope.
 - MSRV: 1.99.
 - TLS: disabled by default; `native-tls` is the default backend when enabled;
   `tls-rustls` and `openssl-vendored` are optional.
 - Previous schema state: `.midas/state.json`.
 - Canonical migration markers: `-- !UP` and `-- !DOWN`.
-- Canonical metadata tables: Postgres `midas.__schema_migrations`, MySQL/SQLite
+- Canonical metadata tables: Postgres `midas.__schema_migrations`, SQLite
   `__schema_migrations`; SQLx adoption uses `_sqlx_migrations`.
 - Diff source: previous schema state for offline diff; shadow DB replay for drift.
 - Rename detection: explicit `was` / `previous_name` only.
@@ -88,7 +90,7 @@ Roadmap reference: WS1, M0; audit sections 9.4 and 9.8.
 - Use `crc` for the SQLx-compatible advisory-lock key.
 - Use `toml` 0.8 for the schema DSL.
 - Use `snapbox` / `trycmd` for snapshots, `assert_cmd` / `assert_fs` for CLI tests,
-  `testcontainers` for Postgres/MySQL integration tests.
+  `testcontainers` for Postgres integration tests, and temp files for SQLite.
 - TLS is disabled by default. When TLS is enabled, `native-tls` is the default
   backend; `rustls` is available only behind the non-default `tls-rustls` feature.
   Keep `openssl-vendored` as a non-default feature for static builds.
@@ -147,8 +149,8 @@ Roadmap reference: WS1, M0; audit sections 9.4 and 9.8.
   - [x] Derive `thiserror::Error` and implement `source()` for wrapped errors.
   - [x] Add `impl From<std::io::Error> for Error`.
   - [x] Add `impl From<toml::de::Error> for Error`.
-  - [x] Add `impl From<postgres::Error>`, `From<mysql::Error>`, `From<rusqlite::Error>`
-        behind the corresponding feature flags.
+  - [x] Add `impl From<postgres::Error>` and `From<rusqlite::Error>` behind the
+        corresponding feature flags.
 - [x] Add user-facing variants:
   - [x] `MigrationNotFound { version: i64 }`
   - [x] `ChecksumMismatch { version: i64, expected: String, actual: String }`
@@ -191,16 +193,12 @@ Roadmap reference: WS1, M0; audit sections 9.4 and 9.8.
 ### 0.4 Driver feature flags
 
 - [x] Add to `crates/midas/Cargo.toml`:
-  - [x] `default = ["postgres", "mysql", "sqlite"]`
+  - [x] `default = ["postgres", "sqlite"]`
   - [x] `postgres = ["dep:postgres"]`
-  - [x] `mysql = ["dep:mysql"]`
   - [x] `sqlite = ["dep:rusqlite"]`
   - [x] `macros = ["dep:midas-macros"]`
-  - [x] `tls-native-tls = ["dep:postgres-native-tls", "dep:native-tls", "mysql?/native-tls"]`
-  - [x] `tls-rustls = ["dep:postgres-rustls", "mysql?/rustls-tls"]`
-        (MySQL uses the native-tls backend: the `mysql` crate cannot build with
-        `native-tls` and `rustls-tls` enabled together, which breaks
-        `--all-features`; see the note in `crates/midas/Cargo.toml`)
+  - [x] `tls-native-tls = ["dep:postgres-native-tls", "dep:native-tls"]`
+  - [x] `tls-rustls = ["dep:postgres-rustls"]`
   - [x] `openssl-vendored = ["tls-native-tls", "native-tls/vendored"]`
 - [x] Add optional TLS dependencies:
   - [x] `postgres-native-tls = { version = "0.5.3", optional = true }`.
@@ -211,12 +209,20 @@ Roadmap reference: WS1, M0; audit sections 9.4 and 9.8.
 - [x] Add CI matrix entries:
   - [x] `--no-default-features`
   - [x] `--no-default-features --features postgres`
-  - [x] `--no-default-features --features mysql`
   - [x] `--no-default-features --features sqlite`
   - [x] `--all-features`
 - [x] Add a compile-fail or `cfg` test that a driver module is absent when its
       feature is off.
 - [x] Add `required-features` to binaries so `midas` builds with the expected set.
+- [x] Remove the MySQL driver, feature, dependency, and tests; `mysql://` URLs now
+      fail with `Error::Config`.
+- [x] Add regression tests that the `mysql` feature, dependency, and module stay
+      absent.
+- [x] Accept `cockroach://` and `cockroachdb://` URL aliases, normalize them to
+      the Postgres wire scheme, and reject MySQL/MariaDB URLs.
+- [x] Add `sequel::DatabaseEngine` as the single source of truth for URL-scheme to
+      engine resolution; configuration, driver selection, the CLI, and the runner
+      now share it.
 
 ### 0.5 Split driver traits
 
@@ -290,13 +296,12 @@ Roadmap reference: WS1, M0; audit sections 9.4 and 9.8.
   - [x] `pub struct TempDir` wrapper that removes itself.
   - [x] `pub fn run_sqlite() -> TempDb`.
   - [x] `pub fn run_postgres() -> TempDb` behind the `postgres` feature.
-  - [x] `pub fn run_mysql() -> TempDb` behind the `mysql` feature.
   - [x] `TempDb` RAII guard drops the database on `Drop`.
 - [x] Add `crates/midas-cli/tests/common/mod.rs`.
   - [x] `run_midas(args, cwd) -> assert_cmd::assert::Assert`.
   - [x] `write_migration(dir, name, up, down)`.
-- [x] Add a smoke test that starts Postgres and MySQL with `testcontainers`,
-      creates a database, and drops it.
+- [x] Add a smoke test that starts Postgres with `testcontainers`, creates a
+      database, and drops it.
 - [x] Add `cargo test --quiet` to the phase checklist.
 
 ## Acceptance criteria
@@ -309,7 +314,7 @@ Roadmap reference: WS1, M0; audit sections 9.4 and 9.8.
 - AC-0.5 `init` creates only `midas.toml`, `schema.toml`, and `migrations/`, and a
       second run fails without `--force`.
 - AC-0.6 CI runs MSRV 1.99, the feature matrix, `cargo deny`, and `cargo audit`.
-- AC-0.7 The Postgres/MySQL/SQLite test harness starts and cleans up in CI.
+- AC-0.7 The Postgres and SQLite test harness starts and cleans up in CI.
 - AC-0.8 No default feature enables `openssl-vendored` or `rand`.
 
 ---
@@ -429,14 +434,6 @@ Roadmap reference: WS2, M1; audit sections 9.1–9.3 and 9.5.
         `checksum BYTEA NOT NULL`,
         `execution_time BIGINT NOT NULL`,
         `down_checksum BYTEA`.
-  - [ ] MySQL:
-        `version BIGINT PRIMARY KEY`,
-        `description VARCHAR(255) NOT NULL`,
-        `installed_on TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)`,
-        `success BOOLEAN NOT NULL`,
-        `checksum BINARY(48) NOT NULL`,
-        `execution_time BIGINT NOT NULL`,
-        `down_checksum BINARY(48)`.
   - [ ] SQLite:
         `version INTEGER PRIMARY KEY`,
         `description TEXT NOT NULL`,
@@ -446,19 +443,19 @@ Roadmap reference: WS2, M1; audit sections 9.1–9.3 and 9.5.
         `execution_time INTEGER NOT NULL`,
         `down_checksum BLOB`.
 - [ ] Implement automatic upgrade from the current one-column tables:
-  - [ ] Detect existing columns with `information_schema.columns` on Postgres/MySQL
+  - [ ] Detect existing columns with `information_schema.columns` on Postgres
         and `PRAGMA table_info` on SQLite.
   - [ ] Add missing columns with `ALTER TABLE`.
   - [ ] Backfill `description = ''`, `success = TRUE`,
         `checksum = <48 zero bytes>`, `execution_time = -1`.
   - [ ] Use dialect-correct zero literals: Postgres `decode(repeat('00', 48), 'hex')`,
-        MySQL `UNHEX(REPEAT('00', 48))`, SQLite `zeroblob(48)`.
+        SQLite `zeroblob(48)`.
   - [ ] Preserve all existing `migration`/`version` values.
   - [ ] Treat an all-zero checksum as a legacy/unverified row and skip checksum
         comparison until `migrate repair` populates it.
 - [ ] Add `Config.metadata_schema` and `Config.metadata_table` support.
   - [ ] Postgres default: schema `midas`, table `__schema_migrations`.
-  - [ ] MySQL/SQLite default: no schema, table `__schema_migrations`.
+  - [ ] SQLite default: no schema, table `__schema_migrations`.
   - [ ] Test adopting `_sqlx_migrations` by setting both fields.
 - [ ] Add integration tests:
   - [ ] Fresh database creates the v2 table.
@@ -475,10 +472,8 @@ Roadmap reference: WS2, M1; audit sections 9.1–9.3 and 9.5.
   - [ ] Execute `SELECT pg_advisory_lock($1)`.
   - [ ] Execute `SELECT pg_advisory_unlock($1)` on drop.
   - [ ] Add a unit test with a known database name and expected key.
-- [ ] MySQL:
-  - [ ] Execute `SELECT GET_LOCK(?, ?)` with a 64-character name.
-  - [ ] Use `midas:<crc32-hex>` when `midas:<database>` exceeds 64 characters.
-  - [ ] Execute `SELECT RELEASE_LOCK(?)` on drop.
+- [ ] CockroachDB: report `Feature::AdvisoryLocks = false` (already done in Phase 0)
+      and require `--no-lock`.
 - [ ] SQLite:
   - [ ] Acquire `BEGIN IMMEDIATE` for the migration transaction.
   - [ ] For `-- no-transaction`, use a short `BEGIN IMMEDIATE` only for the metadata
@@ -513,7 +508,6 @@ Roadmap reference: WS2, M1; audit sections 9.1–9.3 and 9.5.
 - [ ] Add integration tests:
   - [ ] A failing Postgres migration rolls back DDL and leaves a dirty row.
   - [ ] A failing SQLite migration rolls back DDL and leaves a dirty row.
-  - [ ] A failing MySQL migration leaves a dirty row and refuses rerun.
   - [ ] `resolve --applied` allows the next migration to run.
   - [ ] `resolve --rolled-back` allows the same migration to rerun.
   - [ ] `repair` updates a changed checksum.
@@ -564,10 +558,6 @@ Roadmap reference: WS2, M1; audit sections 9.1–9.3 and 9.5.
 - [ ] SQLite:
   - [ ] Replace `Connection::execute` with `Connection::execute_batch`.
   - [ ] Add a test with three statements in one migration.
-- [ ] MySQL:
-  - [ ] Verify `query_drop` executes multiple statements; if not, use
-        `query_iter` and drain results.
-  - [ ] Add a test with three statements.
 - [ ] Postgres:
   - [ ] Keep `simple_query` for multi-statement scripts.
   - [ ] Add a test with three statements.
@@ -579,18 +569,15 @@ Roadmap reference: WS2, M1; audit sections 9.1–9.3 and 9.5.
   - [ ] Connect to `postgres` (or `template1` when dropping `postgres`).
   - [ ] Execute `DROP DATABASE IF EXISTS`.
   - [ ] Add `force_drop_database` that terminates active backends.
-- [ ] MySQL `drop_database`:
-  - [ ] Connect without selecting the target database.
-  - [ ] Execute `DROP DATABASE IF EXISTS`.
 - [ ] SQLite `drop_database`:
   - [ ] Delete the file and recreate an empty connection.
-- [ ] Add `DatabaseAdmin` tests for create/drop/exists on all three dialects.
+- [ ] Add `DatabaseAdmin` tests for create/drop/exists on both dialects.
 - [ ] Add `crates/midas-cli/src/commands/db_lifecycle.rs` with `db create` and
       `db drop` using `DatabaseAdmin`.
 - [ ] Implement `db create --from-migrations <dir>`:
   - [ ] Create the database if absent.
   - [ ] Apply all migrations from the directory.
-- [ ] Add tests for `db create --from-migrations` on Postgres, MySQL, and SQLite.
+- [ ] Add tests for `db create --from-migrations` on Postgres and SQLite.
 
 ## Acceptance criteria
 
@@ -603,7 +590,7 @@ Roadmap reference: WS2, M1; audit sections 9.1–9.3 and 9.5.
 - AC-1.5 Two concurrent `run` processes apply each migration exactly once.
 - AC-1.6 A failed migration leaves a dirty row; `resolve --applied` and
       `resolve --rolled-back` both recover correctly.
-- AC-1.7 Multi-statement migrations pass on Postgres, MySQL, and SQLite.
+- AC-1.7 Multi-statement migrations pass on Postgres and SQLite.
 - AC-1.8 `--dry-run` executes no SQL (assert database state unchanged).
 - AC-1.9 The embedded `migrate!` fixture compiles and applies migrations.
 - AC-1.10 No artificial sleeps remain; no implicit SQLite database URL remains.
@@ -708,7 +695,7 @@ Roadmap reference: WS4, M2; audit section 9.7.
 
 ### 2.4 Conformance and compatibility
 
-- [ ] Add a `sqlx-conformance` CI job with Postgres and MySQL services.
+- [ ] Add a `sqlx-conformance` CI job with a Postgres service.
 - [ ] Verify `execution_time` is stored in nanoseconds.
 - [ ] Verify `success = false` is treated as dirty.
 - [ ] Verify `ignore_missing` behavior when a local migration is removed.
@@ -729,7 +716,7 @@ Roadmap reference: WS4, M2; audit section 9.7.
 - AC-2.6 `SQLX_OFFLINE=true cargo check` passes in the fixture crate.
 - AC-2.7 `sqlx.toml` `table-name`, `create-schemas`, `ignored-chars`, and
       `migrations-dir` are honored.
-- AC-2.8 CI runs the conformance job against Postgres and MySQL.
+- AC-2.8 CI runs the conformance job against Postgres.
 - AC-2.9 Adoption does not alter `_sqlx_migrations`; a missing `down_checksum`
       degrades gracefully and DOWN is validated from the file on revert.
 
@@ -1240,7 +1227,8 @@ Roadmap reference: WS6, M7; audit section 9.8.
 
 ## Rules
 
-- CI must provision Postgres and MySQL services or use Testcontainers.
+- CI must provision Postgres services or use Testcontainers, plus temp files for
+  SQLite.
 - Use unique database names containing pid and an atomic counter.
 - Use `cargo test --quiet` in CI to keep logs focused.
 - No fixed sleeps. Use bounded wait helpers with explicit assertions.
@@ -1261,7 +1249,6 @@ Roadmap reference: WS6, M7; audit section 9.8.
 - [ ] Add a feature matrix job:
   - [ ] `--no-default-features`
   - [ ] `--features postgres`
-  - [ ] `--features mysql`
   - [ ] `--features sqlite`
   - [ ] `--features tls-native-tls`
   - [ ] `--features tls-rustls`
@@ -1279,9 +1266,6 @@ Roadmap reference: WS6, M7; audit section 9.8.
   - [ ] Run metadata upgrade tests.
   - [ ] Run shadow DB/drift tests.
   - [ ] Run introspection round-trip tests.
-- [ ] Add MySQL service or Testcontainers job:
-  - [ ] Run migration apply/revert/dirty tests.
-  - [ ] Run multi-statement tests.
 - [ ] Add SQLite job:
   - [ ] Run apply/revert/checksum tests.
   - [ ] Run multi-statement tests.
@@ -1348,7 +1332,7 @@ Roadmap reference: WS6, M7; audit section 9.8.
 - AC-7.2 The MSRV 1.99 job passes.- [ ] Add a Docker smoke test:
 
 - AC-7.3 The feature matrix passes for every listed combination.
-- AC-7.4 Postgres, MySQL, and SQLite integration suites pass.
+- AC-7.4 Postgres and SQLite integration suites pass.
 - AC-7.5 Concurrency tests prove migrations apply exactly once.
 - AC-7.6 Fuzz targets run without crashes for 30 seconds each.
 - AC-7.7 `cargo deny` and `cargo audit` pass.

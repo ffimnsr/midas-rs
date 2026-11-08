@@ -12,10 +12,6 @@
   doc = "```compile_fail\nuse midas::sequel::postgres;\n```"
 )]
 #![cfg_attr(
-  not(feature = "mysql"),
-  doc = "```compile_fail\nuse midas::sequel::mysql;\n```"
-)]
-#![cfg_attr(
   not(feature = "sqlite"),
   doc = "```compile_fail\nuse midas::sequel::sqlite;\n```"
 )]

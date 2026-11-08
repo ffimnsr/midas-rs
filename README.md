@@ -18,14 +18,16 @@ Do painless migrations.
 
 ## Supported Database
 
-- [x] PostgresSQL
+- [x] PostgresSQL and Postgres-wire compatible servers
 - [x] CockroachDB
-- [x] MySQL
-- [x] MariaDB
 - [x] SQLite3
 - [ ] MSSQL
 - [ ] Cassandra
 - [ ] OracleDB
+
+MySQL and MariaDB are not supported. The migration engine targets a narrow,
+well-tested set of backends: Postgres (including managed and Postgres-compatible
+services) and SQLite.
 
 ## Usage
 
@@ -34,11 +36,8 @@ Do painless migrations.
 Here is a sample command line usage of `midas`.
 
 ```shell
-# PostgresSQL
+# PostgresSQL (also used for CockroachDB and other Postgres-wire servers)
 midas --database 'postgres://postgres:postgres@localhost:5432/startup' --source migrations up
-
-# MySQL/MariaDB
-midas --database 'mysql://root:mysql@localhost:3306/startup' --source migrations up
 
 # SQLite
 midas --database './data.db3' --source migrations up
