@@ -20,6 +20,11 @@ use midas::commander::{
   MigratorOptions,
 };
 use midas::config::Config;
+use midas::sqlx::{
+  qualified_table_name,
+  SqlxMigrationType,
+  SqlxVersioning,
+};
 use midas::{
   migration,
   sequel,
@@ -37,7 +42,7 @@ const SCHEMA_FILE: &str = "schema.toml";
 
 /// Register migration commands on the root command.
 pub fn register(app: Command) -> Command {
-  app
+  let mut app = app
     .subcommand(
       Command::new("init")
         .about("Set up a midas project (midas.toml, schema.toml, migrations/)")
@@ -60,97 +65,171 @@ pub fn register(app: Command) -> Command {
             .help("Create a .up.sql/.down.sql pair")
             .action(clap::ArgAction::SetTrue),
         ),
+    );
+
+  for command in migration_commands() {
+    app = app.subcommand(command.clone());
+  }
+
+  app.subcommand(
+    Command::new("migrate")
+      .about("Migration commands")
+      .arg_required_else_help(true)
+      .subcommands(migration_commands()),
+  )
+}
+
+fn migration_commands() -> Vec<Command> {
+  vec![
+    Command::new("run")
+      .visible_alias("up")
+      .visible_alias("u")
+      .about("Apply pending migrations")
+      .arg(
+        Arg::new("target")
+          .long("target")
+          .value_name("version")
+          .help("Apply only migrations up to this version")
+          .num_args(1)
+          .value_parser(value_parser!(i64)),
+      )
+      .arg(json_flag()),
+    Command::new("info")
+      .visible_alias("status")
+      .visible_alias("s")
+      .about("Show applied, pending, and dirty migrations")
+      .arg(json_flag()),
+    Command::new("list")
+      .visible_alias("ls")
+      .about("List migration files without a database"),
+    Command::new("revert")
+      .visible_alias("r")
+      .about("Revert applied migrations")
+      .arg(
+        Arg::new("to")
+          .long("to")
+          .value_name("version")
+          .help("Revert every migration above this version")
+          .num_args(1)
+          .value_parser(value_parser!(i64)),
+      ),
+    Command::new("redo").about("Revert and re-apply the last migration"),
+    Command::new("baseline")
+      .about("Mark migrations as applied without running SQL")
+      .arg(
+        Arg::new("to")
+          .long("to")
+          .value_name("version")
+          .help("Highest version to mark as applied")
+          .num_args(1)
+          .value_parser(value_parser!(i64))
+          .required_unless_present("from"),
+      )
+      .arg(
+        Arg::new("from")
+          .long("from")
+          .value_name("format")
+          .help("Read applied versions from another migration engine")
+          .value_parser(["sqlx"])
+          .num_args(1),
+      ),
+    Command::new("repair").about("Recompute checksums for applied migrations"),
+    Command::new("resolve")
+      .about("Resolve a dirty migration")
+      .arg(
+        Arg::new("applied")
+          .long("applied")
+          .help("Mark the dirty migration as applied")
+          .action(clap::ArgAction::SetTrue),
+      )
+      .arg(
+        Arg::new("rolled-back")
+          .long("rolled-back")
+          .help("Remove the dirty migration record")
+          .action(clap::ArgAction::SetTrue),
+      )
+      .arg(
+        Arg::new("version")
+          .long("version")
+          .value_name("version")
+          .help("Version to resolve (defaults to the lowest dirty version)")
+          .num_args(1)
+          .value_parser(value_parser!(i64)),
+      ),
+    Command::new("reset").about("Drop metadata and replay every migration"),
+    Command::new("down")
+      .visible_alias("d")
+      .about("Revert every applied migration")
+      .arg(
+        Arg::new("force")
+          .long("force")
+          .help("Required confirmation for reverting everything")
+          .action(clap::ArgAction::SetTrue),
+      ),
+    export_command(),
+    import_command(),
+    Command::new("adopt")
+      .about("Verify that an existing SQLx metadata table can be adopted")
+      .arg(
+        Arg::new("table")
+          .long("table")
+          .value_name("name")
+          .help("SQLx metadata table, optionally schema-qualified")
+          .default_value("_sqlx_migrations")
+          .num_args(1),
+      ),
+  ]
+}
+
+fn export_command() -> Command {
+  Command::new("export")
+    .about("Export migrations for another migration tool")
+    .arg(
+      Arg::new("format")
+        .long("format")
+        .value_name("format")
+        .help("Output format")
+        .value_parser(["sqlx"])
+        .default_value("sqlx")
+        .num_args(1),
     )
-    .subcommand(
-      Command::new("run")
-        .visible_alias("up")
-        .visible_alias("u")
-        .about("Apply pending migrations")
-        .arg(
-          Arg::new("target")
-            .long("target")
-            .value_name("version")
-            .help("Apply only migrations up to this version")
-            .num_args(1)
-            .value_parser(value_parser!(i64)),
-        )
-        .arg(json_flag()),
+    .arg(
+      Arg::new("out")
+        .long("out")
+        .value_name("dir")
+        .help("Directory to write exported migrations into")
+        .required(true)
+        .num_args(1),
     )
-    .subcommand(
-      Command::new("info")
-        .visible_alias("status")
-        .visible_alias("s")
-        .about("Show applied, pending, and dirty migrations")
-        .arg(json_flag()),
+}
+
+fn import_command() -> Command {
+  Command::new("import")
+    .about("Import migrations from another migration tool")
+    .arg(
+      Arg::new("format")
+        .long("format")
+        .value_name("format")
+        .help("Input format")
+        .value_parser(["sqlx"])
+        .default_value("sqlx")
+        .num_args(1),
     )
-    .subcommand(
-      Command::new("list")
-        .visible_alias("ls")
-        .about("List migration files without a database"),
+    .arg(
+      Arg::new("from")
+        .long("from")
+        .value_name("dir")
+        .help("Directory to read migrations from")
+        .required(true)
+        .num_args(1),
     )
-    .subcommand(
-      Command::new("revert")
-        .visible_alias("r")
-        .about("Revert applied migrations")
-        .arg(
-          Arg::new("to")
-            .long("to")
-            .value_name("version")
-            .help("Revert every migration above this version")
-            .num_args(1)
-            .value_parser(value_parser!(i64)),
-        ),
-    )
-    .subcommand(Command::new("redo").about("Revert and re-apply the last migration"))
-    .subcommand(
-      Command::new("baseline")
-        .about("Mark migrations up to a version as applied without running SQL")
-        .arg(
-          Arg::new("to")
-            .long("to")
-            .value_name("version")
-            .help("Highest version to mark as applied")
-            .num_args(1)
-            .value_parser(value_parser!(i64))
-            .required(true),
-        ),
-    )
-    .subcommand(Command::new("repair").about("Recompute checksums for applied migrations"))
-    .subcommand(
-      Command::new("resolve")
-        .about("Resolve a dirty migration")
-        .arg(
-          Arg::new("applied")
-            .long("applied")
-            .help("Mark the dirty migration as applied")
-            .action(clap::ArgAction::SetTrue),
-        )
-        .arg(
-          Arg::new("rolled-back")
-            .long("rolled-back")
-            .help("Remove the dirty migration record")
-            .action(clap::ArgAction::SetTrue),
-        )
-        .arg(
-          Arg::new("version")
-            .long("version")
-            .value_name("version")
-            .help("Version to resolve (defaults to the lowest dirty version)")
-            .num_args(1)
-            .value_parser(value_parser!(i64)),
-        ),
-    )
-    .subcommand(Command::new("reset").about("Drop metadata and replay every migration"))
-    .subcommand(
-      Command::new("down")
-        .visible_alias("d")
-        .about("Revert every applied migration")
-        .arg(
-          Arg::new("force")
-            .long("force")
-            .help("Required confirmation for reverting everything")
-            .action(clap::ArgAction::SetTrue),
-        ),
+    .arg(
+      Arg::new("out")
+        .long("out")
+        .value_name("dir")
+        .help("Directory to write Midas migrations into")
+        .required(true)
+        .num_args(1),
     )
 }
 
@@ -186,11 +265,22 @@ pub fn owns(name: &str) -> bool {
       | "reset"
       | "down"
       | "d"
+      | "migrate"
+      | "export"
+      | "import"
+      | "adopt"
   )
 }
 
 /// Dispatch a migration subcommand.
 pub fn dispatch(name: &str, matches: &ArgMatches, context: &Context) -> Result<()> {
+  if name == "migrate" {
+    let Some((nested, sub)) = matches.subcommand() else {
+      return Ok(());
+    };
+    return dispatch(nested, sub, context);
+  }
+
   match name {
     "init" => init(&context.config, matches.get_flag("force")),
     "add" | "create" | "c" => add(matches, context),
@@ -207,6 +297,9 @@ pub fn dispatch(name: &str, matches: &ArgMatches, context: &Context) -> Result<(
       migrator.down(matches.get_flag("force"))
     })
     .map(drop),
+    "export" => export(matches, context),
+    "import" => import(matches, context),
+    "adopt" => adopt(matches, context),
     other => anyhow::bail!("unknown migration subcommand `{other}`"),
   }
 }
@@ -251,10 +344,39 @@ fn add(matches: &ArgMatches, context: &Context) -> Result<()> {
   let slug = matches
     .get_one::<String>("name")
     .context("migration name is required")?;
-  let reversible = matches.get_flag("reversible");
-  let version = migration::create_migration_file(&context.config.migrations_dir, slug, reversible)?;
+  let existing = migration::discover(&context.config.migrations_dir)?;
+  let reversible = matches.get_flag("reversible")
+    || match context.config.sqlx.default_migration_type {
+      SqlxMigrationType::Reversible => true,
+      SqlxMigrationType::Simple => false,
+      SqlxMigrationType::Inferred => existing
+        .values()
+        .next_back()
+        .is_some_and(|migration| migration.down.is_some()),
+    };
+  let versioning = match context.config.sqlx.default_versioning {
+    SqlxVersioning::Sequential => migration::Versioning::Sequential,
+    SqlxVersioning::Timestamp => migration::Versioning::Timestamp,
+    SqlxVersioning::Inferred => infer_versioning(&existing),
+  };
+  let version =
+    migration::create_migration_file_with(&context.config.migrations_dir, slug, reversible, versioning)?;
   println!("Created migration {version:013}.");
   Ok(())
+}
+
+fn infer_versioning(existing: &migration::MigrationList) -> migration::Versioning {
+  let versions = existing.keys().copied().collect::<Vec<_>>();
+  let sequential = match versions.as_slice() {
+    [only] => *only == 1,
+    [.., previous, latest] => latest - previous == 1,
+    [] => false,
+  };
+  if sequential {
+    migration::Versioning::Sequential
+  } else {
+    migration::Versioning::Timestamp
+  }
 }
 
 fn run(matches: &ArgMatches, context: &Context) -> Result<()> {
@@ -318,6 +440,23 @@ fn revert(matches: &ArgMatches, context: &Context) -> Result<()> {
 }
 
 fn baseline(matches: &ArgMatches, context: &Context) -> Result<()> {
+  if matches.get_one::<String>("from").is_some() {
+    let options = migrator_options(context, false);
+    let report = midas::sqlx::baseline_from_sqlx(&context.config, &options)?;
+    if report.inserted.is_empty() {
+      println!("No SQLx metadata needed to be baselined.");
+    } else {
+      println!(
+        "Baselined {} migration(s) from SQLx metadata.",
+        report.inserted.len()
+      );
+    }
+    if !report.skipped.is_empty() {
+      println!("Skipped {} already-applied migration(s).", report.skipped.len());
+    }
+    return Ok(());
+  }
+
   let target = *matches
     .get_one::<i64>("to")
     .context("baseline version is required")?;
@@ -325,6 +464,58 @@ fn baseline(matches: &ArgMatches, context: &Context) -> Result<()> {
     anyhow::bail!("baseline version must be non-negative");
   }
   with_migrator(context, false, |migrator| migrator.baseline(target)).map(drop)
+}
+
+fn export(matches: &ArgMatches, context: &Context) -> Result<()> {
+  let out = matches
+    .get_one::<String>("out")
+    .context("export directory is required")?;
+  let migrations = migration::discover(&context.config.migrations_dir)?;
+  let written = midas::sqlx::export_sqlx(&migrations, Path::new(out))?;
+  println!("Exported {} migration file(s) to `{out}`.", written.len());
+  Ok(())
+}
+
+fn import(matches: &ArgMatches, context: &Context) -> Result<()> {
+  let from = matches
+    .get_one::<String>("from")
+    .context("import directory is required")?;
+  let out = matches
+    .get_one::<String>("out")
+    .context("output directory is required")?;
+  let migrations = midas::sqlx::import_sqlx_with(Path::new(from), &context.config.sqlx)?;
+  let written = midas::sqlx::write_midas(&migrations, Path::new(out))?;
+  println!(
+    "Imported {} migration(s) into `{out}` ({} file(s)).",
+    migrations.len(),
+    written.len()
+  );
+  Ok(())
+}
+
+fn adopt(matches: &ArgMatches, context: &Context) -> Result<()> {
+  let table = matches
+    .get_one::<String>("table")
+    .map(String::as_str)
+    .unwrap_or("_sqlx_migrations");
+  let report = midas::sqlx::verify_adoption(&context.config, table)?;
+
+  println!(
+    "SQLx metadata table `{}` is adoptable ({} applied migration(s)).",
+    qualified_table_name(report.schema.as_deref(), &report.table),
+    report.applied.len()
+  );
+  if report.has_down_checksum {
+    println!("The table stores DOWN checksums.");
+  } else {
+    println!("No `down_checksum` column; DOWN checksums are validated from migration files on revert.");
+  }
+  println!("To keep using it, add to `midas.toml` [database]:");
+  if let Some(schema) = &report.schema {
+    println!("  metadata_schema = \"{schema}\"");
+  }
+  println!("  metadata_table = \"{}\"", report.table);
+  Ok(())
 }
 
 fn resolve(matches: &ArgMatches, context: &Context) -> Result<()> {
@@ -355,14 +546,19 @@ where
   context.config.require_database_url()?;
   let migrations = migration::discover(&context.config.migrations_dir)?;
   let backend = sequel::connect(&context.config)?;
-  let options = MigratorOptions {
+  let options = migrator_options(context, quiet);
+  let mut migrator = Migrator::new(backend, migrations).with_options(options);
+  Ok(action(&mut migrator)?)
+}
+
+fn migrator_options(context: &Context, quiet: bool) -> MigratorOptions {
+  MigratorOptions {
     dry_run: context.dry_run,
     no_lock: context.no_lock,
     transaction: context.config.transaction,
     quiet,
-  };
-  let mut migrator = Migrator::new(backend, migrations).with_options(options);
-  Ok(action(&mut migrator)?)
+    ignore_missing: context.ignore_missing,
+  }
 }
 
 fn project_template(config: &Config) -> String {

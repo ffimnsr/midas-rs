@@ -1,5 +1,6 @@
 //! SQLite backend.
 
+use std::collections::BTreeSet;
 use std::path::Path;
 use std::time::Duration;
 
@@ -25,14 +26,12 @@ use super::introspect::{
 };
 use super::store::{
   Locker,
+  MetadataInfo,
   MigrationStore,
 };
-use crate::config::{
-  Config,
-  DEFAULT_LOCK_TIMEOUT,
-  DEFAULT_METADATA_TABLE,
-};
+use crate::config::Config;
 use crate::migration::{
+  ChecksumMode,
   MigrationRecord,
   CHECKSUM_LEN,
 };
@@ -47,30 +46,47 @@ pub struct Sqlite {
   file_path: String,
   metadata_table: String,
   lock_timeout: Duration,
+  sqlx_managed: bool,
+  ignored_chars: BTreeSet<char>,
 }
 
 impl Sqlite {
   /// Open a database with default metadata settings.
   pub fn new(file_url: &str) -> Result<Self> {
-    Self::connect(file_url, DEFAULT_METADATA_TABLE, DEFAULT_LOCK_TIMEOUT)
+    let config = Config {
+      database_url: Some(file_url.to_string()),
+      ..Config::default()
+    };
+    Self::connect(&config, file_url, true)
   }
 
   /// Open a database using resolved configuration.
   pub fn with_config(config: &Config, database_url: &str) -> Result<Self> {
-    Self::connect(database_url, &config.metadata_table, config.lock_timeout)
+    Self::connect(config, database_url, true)
   }
 
-  fn connect(file_url: &str, metadata_table: &str, lock_timeout: Duration) -> Result<Self> {
+  /// Open a database without creating or upgrading the metadata table.
+  pub fn open_existing(config: &Config, database_url: &str) -> Result<Self> {
+    Self::connect(config, database_url, false)
+  }
+
+  fn connect(config: &Config, file_url: &str, bootstrap: bool) -> Result<Self> {
     let file_path = normalize_path(file_url);
     let conn = Connection::open(&file_path)?;
-    conn.busy_timeout(lock_timeout)?;
+    conn.busy_timeout(config.lock_timeout)?;
     let mut backend = Self {
       conn,
       file_path,
-      metadata_table: metadata_table.to_string(),
-      lock_timeout,
+      metadata_table: config.metadata_table.clone(),
+      lock_timeout: config.lock_timeout,
+      sqlx_managed: false,
+      ignored_chars: config.sqlx.ignored_chars.clone(),
     };
-    backend.ensure_table()?;
+    if bootstrap {
+      backend.ensure_table()?;
+    } else {
+      backend.detect_metadata()?;
+    }
     Ok(backend)
   }
 
@@ -88,8 +104,7 @@ impl Sqlite {
     quote_ident_with(&self.metadata_table, '"')
   }
 
-  fn upgrade_table(&mut self) -> Result<()> {
-    let table = self.table();
+  fn columns(&self) -> Result<Vec<(String, String)>> {
     let mut statement = self
       .conn
       .prepare("select name, type from pragma_table_info(?1)")?;
@@ -98,7 +113,28 @@ impl Sqlite {
         Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
       })?
       .collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(columns)
+  }
 
+  fn detect_metadata(&mut self) -> Result<()> {
+    let columns = self.columns()?;
+    self.sqlx_managed = is_sqlx_table(&columns);
+    Ok(())
+  }
+
+  fn upgrade_table(&mut self) -> Result<()> {
+    let columns = self.columns()?;
+    if columns.is_empty() {
+      self.create_table()?;
+      return Ok(());
+    }
+    if is_sqlx_table(&columns) {
+      self.sqlx_managed = true;
+      return Ok(());
+    }
+    self.sqlx_managed = false;
+
+    let table = self.table();
     let has = |name: &str| columns.iter().any(|(column, _)| column == name);
     let compatible = has("version")
       && has("description")
@@ -212,24 +248,33 @@ impl Executor for Sqlite {
 
 impl MigrationStore for Sqlite {
   fn ensure_table(&mut self) -> Result<()> {
-    let exists: bool = self.conn.query_row(
-      "select exists(select 1 from sqlite_master where type = 'table' and name = ?1)",
-      [&self.metadata_table],
-      |row| row.get(0),
-    )?;
-
-    if !exists {
-      self.create_table()?;
-      return Ok(());
-    }
-
     self.upgrade_table()
+  }
+
+  fn metadata_info(&mut self) -> Result<MetadataInfo> {
+    let columns = self.columns()?;
+    Ok(MetadataInfo {
+      exists: !columns.is_empty(),
+      sqlx_managed: self.sqlx_managed,
+      columns: columns.into_iter().map(|(column, _)| column).collect(),
+    })
+  }
+
+  fn checksum_mode(&self) -> ChecksumMode {
+    if self.sqlx_managed {
+      ChecksumMode::Sqlx {
+        ignored_chars: self.ignored_chars.clone(),
+      }
+    } else {
+      ChecksumMode::Midas
+    }
   }
 
   fn list_migrations(&mut self) -> Result<Vec<MigrationRecord>> {
     let table = self.table();
+    let down = self.down_checksum_expr();
     let mut statement = self.conn.prepare(&format!(
-      "SELECT version, description, installed_on, success, checksum, execution_time, down_checksum \
+      "SELECT version, description, installed_on, success, checksum, execution_time, {down} \
        FROM {table} ORDER BY version ASC"
     ))?;
     let rows = statement.query_map((), row_to_record)?;
@@ -242,8 +287,9 @@ impl MigrationStore for Sqlite {
 
   fn get_last(&mut self) -> Result<Option<MigrationRecord>> {
     let table = self.table();
+    let down = self.down_checksum_expr();
     let mut statement = self.conn.prepare(&format!(
-      "SELECT version, description, installed_on, success, checksum, execution_time, down_checksum \
+      "SELECT version, description, installed_on, success, checksum, execution_time, {down} \
        FROM {table} ORDER BY version DESC LIMIT 1"
     ))?;
     let migration = statement.query_row((), row_to_record).optional()?;
@@ -252,45 +298,82 @@ impl MigrationStore for Sqlite {
 
   fn insert(&mut self, record: &MigrationRecord) -> Result<()> {
     let table = self.table();
-    self.conn.execute(
-      &format!(
-        "INSERT INTO {table} (version, description, success, checksum, execution_time, down_checksum) \
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6)"
-      ),
-      params![
-        record.version,
-        record.description,
-        record.success,
-        record.checksum,
-        record.execution_time,
-        record.down_checksum
-      ],
-    )?;
+    if self.sqlx_managed {
+      self.conn.execute(
+        &format!(
+          "INSERT INTO {table} (version, description, success, checksum, execution_time) \
+           VALUES (?1, ?2, ?3, ?4, ?5)"
+        ),
+        params![
+          record.version,
+          record.description,
+          record.success,
+          record.checksum,
+          record.execution_time
+        ],
+      )?;
+    } else {
+      self.conn.execute(
+        &format!(
+          "INSERT INTO {table} (version, description, success, checksum, execution_time, down_checksum) \
+           VALUES (?1, ?2, ?3, ?4, ?5, ?6)"
+        ),
+        params![
+          record.version,
+          record.description,
+          record.success,
+          record.checksum,
+          record.execution_time,
+          record.down_checksum
+        ],
+      )?;
+    }
     Ok(())
   }
 
   fn upsert(&mut self, record: &MigrationRecord) -> Result<()> {
     let table = self.table();
-    self.conn.execute(
-      &format!(
-        "INSERT INTO {table} (version, description, success, checksum, execution_time, down_checksum) \
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6) \
-         ON CONFLICT(version) DO UPDATE SET \
-           description = excluded.description, \
-           success = excluded.success, \
-           checksum = excluded.checksum, \
-           execution_time = excluded.execution_time, \
-           down_checksum = excluded.down_checksum"
-      ),
-      params![
-        record.version,
-        record.description,
-        record.success,
-        record.checksum,
-        record.execution_time,
-        record.down_checksum
-      ],
-    )?;
+    if self.sqlx_managed {
+      self.conn.execute(
+        &format!(
+          "INSERT INTO {table} (version, description, success, checksum, execution_time) \
+           VALUES (?1, ?2, ?3, ?4, ?5) \
+           ON CONFLICT(version) DO UPDATE SET \
+             description = excluded.description, \
+             success = excluded.success, \
+             checksum = excluded.checksum, \
+             execution_time = excluded.execution_time"
+        ),
+        params![
+          record.version,
+          record.description,
+          record.success,
+          record.checksum,
+          record.execution_time
+        ],
+      )?;
+    } else {
+      self.conn.execute(
+        &format!(
+          "INSERT INTO {table} (version, description, success, checksum, execution_time, down_checksum) \
+           VALUES (?1, ?2, ?3, ?4, ?5, ?6) \
+           ON CONFLICT(version) DO UPDATE SET \
+             description = excluded.description, \
+             success = excluded.success, \
+             checksum = excluded.checksum, \
+             execution_time = excluded.execution_time, \
+             down_checksum = excluded.down_checksum"
+        ),
+        params![
+          record.version,
+          record.description,
+          record.success,
+          record.checksum,
+          record.execution_time,
+          record.down_checksum
+        ],
+      )?;
+    }
     Ok(())
   }
 
@@ -314,15 +397,22 @@ impl MigrationStore for Sqlite {
 
   fn repair(&mut self, record: &MigrationRecord) -> Result<()> {
     let table = self.table();
-    self.conn.execute(
-      &format!("UPDATE {table} SET description = ?2, checksum = ?3, down_checksum = ?4 WHERE version = ?1"),
-      params![
-        record.version,
-        record.description,
-        record.checksum,
-        record.down_checksum
-      ],
-    )?;
+    if self.sqlx_managed {
+      self.conn.execute(
+        &format!("UPDATE {table} SET description = ?2, checksum = ?3 WHERE version = ?1"),
+        params![record.version, record.description, record.checksum],
+      )?;
+    } else {
+      self.conn.execute(
+        &format!("UPDATE {table} SET description = ?2, checksum = ?3, down_checksum = ?4 WHERE version = ?1"),
+        params![
+          record.version,
+          record.description,
+          record.checksum,
+          record.down_checksum
+        ],
+      )?;
+    }
     Ok(())
   }
 
@@ -333,6 +423,36 @@ impl MigrationStore for Sqlite {
       .execute_batch(&format!("DROP TABLE IF EXISTS {table}"))?;
     Ok(())
   }
+}
+
+impl Sqlite {
+  fn down_checksum_expr(&self) -> &'static str {
+    if self.sqlx_managed {
+      "NULL"
+    } else {
+      "down_checksum"
+    }
+  }
+}
+
+fn is_sqlx_table(columns: &[(String, String)]) -> bool {
+  let has = |name: &str| columns.iter().any(|(column, _)| column == name);
+  [
+    "version",
+    "description",
+    "installed_on",
+    "success",
+    "checksum",
+    "execution_time",
+  ]
+  .iter()
+  .all(|column| has(column))
+    && !has("down_checksum")
+    && !has("migration")
+    && !has("execution_time_ms")
+    && columns
+      .iter()
+      .any(|(column, kind)| column == "checksum" && kind.eq_ignore_ascii_case("blob"))
 }
 
 impl Locker for Sqlite {

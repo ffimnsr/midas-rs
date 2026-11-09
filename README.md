@@ -63,9 +63,13 @@ Here are the available subcommands:
 
 ```shell
 add       Create a timestamped migration file
+adopt     Verify that an existing SQLx metadata table can be adopted
 baseline  Mark migrations up to a version as applied without running SQL
 db        Database lifecycle commands
+doctor    Diagnose database and migration state
 down      Revert every applied migration
+export    Export migrations for another migration tool
+import    Import migrations from another migration tool
 info      Show applied, pending, and dirty migrations
 init      Set up a midas project
 list      List migration files without a database
@@ -76,6 +80,28 @@ resolve   Resolve a dirty migration
 revert    Revert applied migrations
 run       Apply pending migrations
 ```
+
+### SQLx interoperability
+
+Midas can read and write SQLx migration files and adopt an existing SQLx
+metadata table without re-running applied SQL.
+
+```shell
+# Export Midas migrations for sqlx-cli or `sqlx::migrate!`
+midas --source migrations migrate export --format sqlx --out sqlx-migrations
+
+# Import SQLx migrations as Midas migrations
+midas sqlx import --from migrations --out midas-migrations
+
+# Copy applied versions from _sqlx_migrations into Midas metadata
+midas --source migrations migrate baseline --from sqlx
+
+# Keep using the SQLx table directly (it is never altered)
+midas migrate adopt --table _sqlx_migrations
+```
+
+Settings in `sqlx.toml` (`table-name`, `migrations-dir`, `create-schemas`,
+`ignored-chars`, and `[migrate.defaults]`) are honored automatically.
 
 For more info see `--help`.
 

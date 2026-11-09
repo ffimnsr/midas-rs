@@ -6,8 +6,6 @@ on:
   push:
     branches:
       - master
-  schedule:
-    - cron: '00 01 * * *'
 
 permissions:
   contents: read
@@ -221,6 +219,98 @@ jobs:
           toolchain: stable
       - name: Run the embedded migrate! fixture
         run: cargo run --manifest-path crates/midas/tests/fixtures/embedded/Cargo.toml
+  sqlx-conformance:
+    runs-on: ubuntu-latest
+    needs:
+      - check-pass
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/midas_sqlx_conformance
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install packages
+        run: ci/ubuntu-install-packages
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+      - name: Install sqlx-cli
+        run: >-
+          cargo install sqlx-cli --version 0.9.0 --locked
+          --no-default-features --features postgres,rustls,sqlx-toml
+      - name: Create database with Midas
+        run: >-
+          cargo run -p midas-cli --all-features --
+          --database "$DATABASE_URL" db create
+          --from-migrations crates/midas/tests/fixtures/sqlx-export/migrations
+      - name: Export SQLx migrations
+        run: >-
+          cargo run -p midas-cli --all-features --
+          --source crates/midas/tests/fixtures/sqlx-export/migrations
+          migrate export --format sqlx --out /tmp/sqlx-export
+      - name: Run sqlx migrate against the export
+        run: |
+          export SQLX_URL=postgres://postgres:postgres@localhost:5432/midas_sqlx_conformance_export
+          DATABASE_URL="$SQLX_URL" sqlx database create
+          DATABASE_URL="$SQLX_URL" sqlx migrate info --source /tmp/sqlx-export
+          DATABASE_URL="$SQLX_URL" sqlx migrate run --source /tmp/sqlx-export
+  sqlx-prepare:
+    runs-on: ubuntu-latest
+    needs:
+      - check-pass
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/midas_sqlx_prepare
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install packages
+        run: ci/ubuntu-install-packages
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+      - name: Install sqlx-cli
+        run: >-
+          cargo install sqlx-cli --version 0.9.0 --locked
+          --no-default-features --features postgres,rustls,sqlx-toml
+      - name: Create schema-only database
+        run: >-
+          cargo run -p midas-cli --all-features --
+          --database "$DATABASE_URL" db create
+          --from-migrations crates/midas/tests/fixtures/sqlx-prepare/migrations
+      - name: Prepare offline metadata
+        working-directory: crates/midas/tests/fixtures/sqlx-prepare
+        run: cargo sqlx prepare --workspace -- --all-targets --all-features
+      - name: Check offline metadata
+        working-directory: crates/midas/tests/fixtures/sqlx-prepare
+        run: cargo sqlx prepare --check --workspace -- --all-targets --all-features
+      - name: Compile with offline metadata
+        working-directory: crates/midas/tests/fixtures/sqlx-prepare
+        env:
+          SQLX_OFFLINE: "true"
+        run: cargo check --all-targets --all-features
   deny:
     runs-on: ubuntu-latest
     steps:

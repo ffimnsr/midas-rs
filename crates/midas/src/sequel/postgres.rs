@@ -1,6 +1,9 @@
 //! PostgreSQL backend.
 
-use std::collections::BTreeMap;
+use std::collections::{
+  BTreeMap,
+  BTreeSet,
+};
 use std::time::Duration;
 
 use postgres::error::SqlState;
@@ -26,15 +29,13 @@ use super::introspect::{
 };
 use super::store::{
   Locker,
+  MetadataInfo,
   MigrationStore,
 };
 use super::DatabaseEngine;
-use crate::config::{
-  Config,
-  DEFAULT_LOCK_TIMEOUT,
-  DEFAULT_METADATA_TABLE,
-};
+use crate::config::Config;
 use crate::migration::{
+  ChecksumMode,
   MigrationRecord,
   CHECKSUM_LEN,
 };
@@ -42,8 +43,6 @@ use crate::{
   Error,
   Result,
 };
-
-const DEFAULT_METADATA_SCHEMA: &str = "midas";
 
 /// URL schemes that identify Postgres-wire compatible engines.
 const POSTGRES_SCHEME_ALIASES: &[&str] = &["cockroach", "cockroachdb"];
@@ -74,82 +73,75 @@ pub struct Postgres {
   client: Client,
   database_url: String,
   metadata_schema: String,
+  metadata_schema_explicit: bool,
   metadata_table: String,
+  create_schemas: BTreeSet<String>,
   lock_timeout: Duration,
   lock_key: i64,
   flavor: PostgresFlavor,
+  sqlx_managed: bool,
+  ignored_chars: BTreeSet<char>,
 }
 
 impl Postgres {
   /// Connect with default metadata settings.
   pub fn new(database_url: &str) -> Result<Self> {
-    Self::connect(
-      database_url,
-      DEFAULT_METADATA_SCHEMA,
-      DEFAULT_METADATA_TABLE,
-      DEFAULT_LOCK_TIMEOUT,
-      true,
-    )
+    let config = Config {
+      database_url: Some(database_url.to_string()),
+      ..Config::default()
+    };
+    Self::connect(&config, database_url, true)
   }
 
   /// Connect using resolved configuration.
   pub fn with_config(config: &Config) -> Result<Self> {
-    let database_url = config.require_database_url()?;
-    let metadata_schema = config
-      .metadata_schema
-      .clone()
-      .unwrap_or_else(|| DEFAULT_METADATA_SCHEMA.to_string());
-    Self::connect(
-      database_url,
-      &metadata_schema,
-      &config.metadata_table,
-      config.lock_timeout,
-      true,
-    )
+    Self::connect(config, config.require_database_url()?, true)
+  }
+
+  /// Connect without creating or upgrading the metadata table.
+  pub fn open_existing(config: &Config) -> Result<Self> {
+    Self::connect(config, config.require_database_url()?, false)
   }
 
   /// Connect to the maintenance database without touching the target database.
   pub fn admin(config: &Config) -> Result<Self> {
     let database_url = config.require_database_url()?;
-    let metadata_schema = config
-      .metadata_schema
-      .clone()
-      .unwrap_or_else(|| DEFAULT_METADATA_SCHEMA.to_string());
     let normalized = normalize_database_url(database_url)?;
     let maintenance = maintenance_url(&normalized)?;
-    Self::connect(
-      &maintenance,
-      &metadata_schema,
-      &config.metadata_table,
-      config.lock_timeout,
-      false,
-    )
+    Self::connect(config, &maintenance, false)
   }
 
-  fn connect(
-    database_url: &str,
-    metadata_schema: &str,
-    metadata_table: &str,
-    lock_timeout: Duration,
-    bootstrap: bool,
-  ) -> Result<Self> {
+  fn connect(config: &Config, database_url: &str, bootstrap: bool) -> Result<Self> {
     let connection_url = normalize_database_url(database_url)?;
     let url =
       Url::parse(&connection_url).map_err(|error| Error::config(format!("invalid database URL: {error}")))?;
     let database_name = database_name(&url)?;
     let flavor = flavor_for_engine(DatabaseEngine::from_scheme(url.scheme())?)?;
-    let client = Client::connect(&connection_url, NoTls)?;
+    let mut client = Client::connect(&connection_url, NoTls)?;
+
+    let metadata_schema_explicit = config.metadata_schema.is_some();
+    let metadata_schema = match config.metadata_schema.as_deref() {
+      Some(schema) if !schema.trim().is_empty() => schema.to_string(),
+      _ => current_schema(&mut client)?,
+    };
+
     let mut backend = Self {
       client,
       database_url: connection_url,
-      metadata_schema: metadata_schema.to_string(),
-      metadata_table: metadata_table.to_string(),
-      lock_timeout,
+      metadata_schema,
+      metadata_schema_explicit,
+      metadata_table: config.metadata_table.clone(),
+      create_schemas: config.create_schemas.clone(),
+      lock_timeout: config.lock_timeout,
       lock_key: advisory_lock_key(&database_name),
       flavor,
+      sqlx_managed: false,
+      ignored_chars: config.sqlx.ignored_chars.clone(),
     };
     if bootstrap {
       backend.ensure_table()?;
+    } else {
+      backend.detect_metadata()?;
     }
     Ok(backend)
   }
@@ -167,17 +159,28 @@ impl Postgres {
     Ok(Client::connect(&url, NoTls)?)
   }
 
-  fn upgrade_table(&mut self) -> Result<()> {
-    let table = self.qualified_table();
+  fn column_types(&mut self) -> Result<BTreeMap<String, String>> {
     let rows = self.client.query(
       "select column_name, data_type from information_schema.columns \
        where table_schema = $1 and table_name = $2",
       &[&self.metadata_schema, &self.metadata_table],
     )?;
-    let columns = rows
-      .iter()
-      .map(|row| (row.get::<_, String>(0), row.get::<_, String>(1)))
-      .collect::<BTreeMap<_, _>>();
+    Ok(
+      rows
+        .iter()
+        .map(|row| (row.get::<_, String>(0), row.get::<_, String>(1)))
+        .collect(),
+    )
+  }
+
+  fn detect_metadata(&mut self) -> Result<()> {
+    let columns = self.column_types()?;
+    self.sqlx_managed = is_sqlx_table(&columns);
+    Ok(())
+  }
+
+  fn upgrade_table(&mut self, columns: &BTreeMap<String, String>) -> Result<()> {
+    let table = self.qualified_table();
 
     if columns.contains_key("migration") && !columns.contains_key("version") {
       self
@@ -245,6 +248,40 @@ impl Postgres {
 
     Ok(())
   }
+
+  fn down_checksum_expr(&self) -> &'static str {
+    if self.sqlx_managed {
+      "null::bytea"
+    } else {
+      "down_checksum"
+    }
+  }
+}
+
+fn current_schema(client: &mut Client) -> Result<String> {
+  let row = client.query_one("select current_schema()", &[])?;
+  row
+    .get::<_, Option<String>>(0)
+    .ok_or_else(|| Error::config("database has no current schema; set `metadata_schema`"))
+}
+
+fn is_sqlx_table(columns: &BTreeMap<String, String>) -> bool {
+  [
+    "version",
+    "description",
+    "installed_on",
+    "success",
+    "checksum",
+    "execution_time",
+  ]
+  .iter()
+  .all(|column| columns.contains_key(*column))
+    && !columns.contains_key("down_checksum")
+    && !columns.contains_key("migration")
+    && !columns.contains_key("execution_time_ms")
+    && columns
+      .get("checksum")
+      .is_some_and(|kind| !kind.eq_ignore_ascii_case("text"))
 }
 
 impl Executor for Postgres {
@@ -276,12 +313,22 @@ impl Executor for Postgres {
 
 impl MigrationStore for Postgres {
   fn ensure_table(&mut self) -> Result<()> {
-    let schema = quote_ident_with(&self.metadata_schema, '"');
-    let table = self.qualified_table();
-    self
-      .client
-      .batch_execute(&format!("create schema if not exists {schema}"))?;
+    for schema in self.create_schemas.clone() {
+      if !schema.trim().is_empty() {
+        let schema = quote_ident_with(&schema, '"');
+        self
+          .client
+          .batch_execute(&format!("create schema if not exists {schema}"))?;
+      }
+    }
+    if self.metadata_schema_explicit {
+      let schema = quote_ident_with(&self.metadata_schema, '"');
+      self
+        .client
+        .batch_execute(&format!("create schema if not exists {schema}"))?;
+    }
 
+    let table = self.qualified_table();
     let exists: bool = self
       .client
       .query_one(
@@ -303,17 +350,46 @@ impl MigrationStore for Postgres {
           down_checksum bytea
         )"
       ))?;
+      self.sqlx_managed = false;
       return Ok(());
     }
 
-    self.upgrade_table()
+    let columns = self.column_types()?;
+    if is_sqlx_table(&columns) {
+      // SQLx owns this table. Never add columns or change its shape.
+      self.sqlx_managed = true;
+      return Ok(());
+    }
+
+    self.sqlx_managed = false;
+    self.upgrade_table(&columns)
+  }
+
+  fn metadata_info(&mut self) -> Result<MetadataInfo> {
+    let columns = self.column_types()?;
+    Ok(MetadataInfo {
+      exists: !columns.is_empty(),
+      sqlx_managed: self.sqlx_managed,
+      columns: columns.into_keys().collect(),
+    })
+  }
+
+  fn checksum_mode(&self) -> ChecksumMode {
+    if self.sqlx_managed {
+      ChecksumMode::Sqlx {
+        ignored_chars: self.ignored_chars.clone(),
+      }
+    } else {
+      ChecksumMode::Midas
+    }
   }
 
   fn list_migrations(&mut self) -> Result<Vec<MigrationRecord>> {
     let table = self.qualified_table();
+    let down = self.down_checksum_expr();
     let rows = self.client.query(
       &format!(
-        "select version, description, installed_on::text, success, checksum, execution_time, down_checksum \
+        "select version, description, installed_on::text, success, checksum, execution_time, {down} \
          from {table} order by version asc"
       ),
       &[],
@@ -324,9 +400,10 @@ impl MigrationStore for Postgres {
 
   fn get_last(&mut self) -> Result<Option<MigrationRecord>> {
     let table = self.qualified_table();
+    let down = self.down_checksum_expr();
     let rows = self.client.query(
       &format!(
-        "select version, description, installed_on::text, success, checksum, execution_time, down_checksum \
+        "select version, description, installed_on::text, success, checksum, execution_time, {down} \
          from {table} order by version desc limit 1"
       ),
       &[],
@@ -337,45 +414,82 @@ impl MigrationStore for Postgres {
 
   fn insert(&mut self, record: &MigrationRecord) -> Result<()> {
     let table = self.qualified_table();
-    self.client.execute(
-      &format!(
-        "insert into {table} (version, description, success, checksum, execution_time, down_checksum) \
-         values ($1, $2, $3, $4, $5, $6)"
-      ),
-      &[
-        &record.version,
-        &record.description,
-        &record.success,
-        &record.checksum,
-        &record.execution_time,
-        &record.down_checksum.as_deref(),
-      ],
-    )?;
+    if self.sqlx_managed {
+      self.client.execute(
+        &format!(
+          "insert into {table} (version, description, success, checksum, execution_time) \
+           values ($1, $2, $3, $4, $5)"
+        ),
+        &[
+          &record.version,
+          &record.description,
+          &record.success,
+          &record.checksum,
+          &record.execution_time,
+        ],
+      )?;
+    } else {
+      self.client.execute(
+        &format!(
+          "insert into {table} (version, description, success, checksum, execution_time, down_checksum) \
+           values ($1, $2, $3, $4, $5, $6)"
+        ),
+        &[
+          &record.version,
+          &record.description,
+          &record.success,
+          &record.checksum,
+          &record.execution_time,
+          &record.down_checksum.as_deref(),
+        ],
+      )?;
+    }
     Ok(())
   }
 
   fn upsert(&mut self, record: &MigrationRecord) -> Result<()> {
     let table = self.qualified_table();
-    self.client.execute(
-      &format!(
-        "insert into {table} (version, description, success, checksum, execution_time, down_checksum) \
-         values ($1, $2, $3, $4, $5, $6) \
-         on conflict (version) do update set \
-           description = excluded.description, \
-           success = excluded.success, \
-           checksum = excluded.checksum, \
-           execution_time = excluded.execution_time, \
-           down_checksum = excluded.down_checksum"
-      ),
-      &[
-        &record.version,
-        &record.description,
-        &record.success,
-        &record.checksum,
-        &record.execution_time,
-        &record.down_checksum.as_deref(),
-      ],
-    )?;
+    if self.sqlx_managed {
+      self.client.execute(
+        &format!(
+          "insert into {table} (version, description, success, checksum, execution_time) \
+           values ($1, $2, $3, $4, $5) \
+           on conflict (version) do update set \
+             description = excluded.description, \
+             success = excluded.success, \
+             checksum = excluded.checksum, \
+             execution_time = excluded.execution_time"
+        ),
+        &[
+          &record.version,
+          &record.description,
+          &record.success,
+          &record.checksum,
+          &record.execution_time,
+        ],
+      )?;
+    } else {
+      self.client.execute(
+        &format!(
+          "insert into {table} (version, description, success, checksum, execution_time, down_checksum) \
+           values ($1, $2, $3, $4, $5, $6) \
+           on conflict (version) do update set \
+             description = excluded.description, \
+             success = excluded.success, \
+             checksum = excluded.checksum, \
+             execution_time = excluded.execution_time, \
+             down_checksum = excluded.down_checksum"
+        ),
+        &[
+          &record.version,
+          &record.description,
+          &record.success,
+          &record.checksum,
+          &record.execution_time,
+          &record.down_checksum.as_deref(),
+        ],
+      )?;
+    }
     Ok(())
   }
 
@@ -398,15 +512,22 @@ impl MigrationStore for Postgres {
 
   fn repair(&mut self, record: &MigrationRecord) -> Result<()> {
     let table = self.qualified_table();
-    self.client.execute(
-      &format!("update {table} set description = $2, checksum = $3, down_checksum = $4 where version = $1"),
-      &[
-        &record.version,
-        &record.description,
-        &record.checksum,
-        &record.down_checksum.as_deref(),
-      ],
-    )?;
+    if self.sqlx_managed {
+      self.client.execute(
+        &format!("update {table} set description = $2, checksum = $3 where version = $1"),
+        &[&record.version, &record.description, &record.checksum],
+      )?;
+    } else {
+      self.client.execute(
+        &format!("update {table} set description = $2, checksum = $3, down_checksum = $4 where version = $1"),
+        &[
+          &record.version,
+          &record.description,
+          &record.checksum,
+          &record.down_checksum.as_deref(),
+        ],
+      )?;
+    }
     Ok(())
   }
 

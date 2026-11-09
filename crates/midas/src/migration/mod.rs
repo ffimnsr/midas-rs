@@ -9,6 +9,7 @@ pub mod lock;
 pub mod record;
 
 use std::borrow::Cow;
+use std::collections::BTreeSet;
 use std::path::{
   Path,
   PathBuf,
@@ -16,11 +17,16 @@ use std::path::{
 
 pub use file::{
   create_migration_file,
+  create_migration_file_with,
   discover,
+  discover_with,
   parse_filename,
+  validate_description,
   FilePart,
   MigrationList,
   ParsedFilename,
+  SqlFilePolicy,
+  Versioning,
 };
 pub use lock::LockGuard;
 pub use record::{
@@ -156,6 +162,58 @@ impl Migration {
   pub fn checksum_down_hex(&self) -> Option<String> {
     self.checksum_down.as_ref().map(|checksum| checksum_hex(checksum))
   }
+
+  /// Compute UP and DOWN checksums using a specific checksum contract.
+  pub fn checksums_for(&self, mode: ChecksumMode) -> ([u8; CHECKSUM_LEN], Option<[u8; CHECKSUM_LEN]>) {
+    (
+      mode.checksum(&self.up),
+      self.down.as_deref().map(|down| mode.checksum(down)),
+    )
+  }
+}
+
+/// Checksum contract used by a metadata table.
+///
+/// Midas normalizes line endings before hashing. SQLx hashes the raw file
+/// content and optionally removes configured characters. Adopted SQLx tables
+/// must be validated with the SQLx contract.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum ChecksumMode {
+  /// Midas checksums with CRLF normalization.
+  #[default]
+  Midas,
+  /// SQLx checksums over raw content with ignored characters removed.
+  Sqlx {
+    /// Characters removed before hashing.
+    ignored_chars: BTreeSet<char>,
+  },
+}
+
+impl ChecksumMode {
+  /// Compute a checksum according to this mode.
+  pub fn checksum(&self, sql: &str) -> [u8; CHECKSUM_LEN] {
+    match self {
+      Self::Midas => checksum(sql),
+      Self::Sqlx { ignored_chars } => checksum_sqlx(sql, ignored_chars),
+    }
+  }
+}
+
+/// Compute a SQLx-compatible SHA-384 checksum.
+///
+pub(crate) fn checksum_sqlx(sql: &str, ignored_chars: &BTreeSet<char>) -> [u8; CHECKSUM_LEN] {
+  let mut hasher = Sha384::new();
+  if ignored_chars.is_empty() {
+    hasher.update(sql.as_bytes());
+  } else {
+    for fragment in sql.split(|character| ignored_chars.contains(&character)) {
+      hasher.update(fragment.as_bytes());
+    }
+  }
+  let digest = hasher.finalize();
+  let mut out = [0u8; CHECKSUM_LEN];
+  out.copy_from_slice(&digest);
+  out
 }
 
 /// Compute the SHA-384 checksum of SQL after newline normalization.

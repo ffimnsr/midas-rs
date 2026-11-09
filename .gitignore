@@ -4,6 +4,9 @@
 .env
 .env.midas
 .midas/
+crates/midas/tests/fixtures/*/target/
+crates/midas/tests/fixtures/sqlx-prepare/.sqlx/
+!crates/midas/tests/fixtures/sqlx-prepare/.env
 *.md
 !/CODE_OF_CONDUCT.md
 !/CONTRIBUTING.md

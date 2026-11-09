@@ -119,6 +119,7 @@ fn apply_migrations(config: &Config, context: &Context) -> Result<()> {
     no_lock: context.no_lock,
     transaction: config.transaction,
     quiet: false,
+    ignore_missing: context.ignore_missing,
   };
   let mut migrator = Migrator::new(backend, migrations).with_options(options);
   migrator.up(None)?;

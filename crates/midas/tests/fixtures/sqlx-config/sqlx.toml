@@ -1,0 +1,16 @@
+[common]
+database-url-var = "APP_DATABASE_URL"
+
+[macros]
+unused = "ignored"
+
+[migrate]
+table-name = "audit._sqlx_migrations"
+migrations-dir = "db/migrations"
+create-schemas = ["audit"]
+ignored-chars = ["\r", "\n"]
+unrecognized-sql-files = "warn"
+
+[migrate.defaults]
+migration-type = "reversible"
+migration-versioning = "sequential"

@@ -111,8 +111,11 @@ pub fn midas_entry(command_name: &str, is_subcommand: bool) -> Result<()> {
   // (possibly invalid) `midas.toml`.
   let config_dir = (matches.subcommand_name() != Some("init")).then_some(cwd.as_path());
   let config = Config::load(&ProcessEnv, &overrides, config_dir)?;
-  let context =
-    commands::Context::new(config).with_flags(matches.get_flag("dry-run"), matches.get_flag("no-lock"));
+  let context = commands::Context::new(config).with_flags(
+    matches.get_flag("dry-run"),
+    matches.get_flag("no-lock"),
+    matches.get_flag("ignore-missing"),
+  );
 
   let start = Instant::now();
   commands::dispatch(&matches, &context)?;
@@ -179,6 +182,13 @@ fn build_cli(command_name: &str, is_subcommand: bool) -> Command {
       Arg::new("no-lock")
         .long("no-lock")
         .help("Skip the advisory migration lock")
+        .action(clap::ArgAction::SetTrue)
+        .global(true),
+    )
+    .arg(
+      Arg::new("ignore-missing")
+        .long("ignore-missing")
+        .help("Ignore applied migrations whose files are no longer present")
         .action(clap::ArgAction::SetTrue)
         .global(true),
     );

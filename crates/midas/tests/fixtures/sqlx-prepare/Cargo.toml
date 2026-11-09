@@ -1,0 +1,16 @@
+[package]
+name = "sqlx-prepare-fixture"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[dependencies]
+sqlx = { version = "0.9.0", features = [
+  "runtime-tokio",
+  "postgres",
+  "macros",
+  "migrate",
+] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }

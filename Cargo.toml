@@ -1,7 +1,10 @@
 [workspace]
 resolver = "2"
 members = ["crates/midas", "crates/midas-cli", "crates/midas-macros"]
-exclude = ["crates/midas/tests/fixtures/embedded"]
+exclude = [
+  "crates/midas/tests/fixtures/embedded",
+  "crates/midas/tests/fixtures/sqlx-prepare",
+]
 
 [workspace.package]
 version = "0.7.6"
@@ -33,7 +36,7 @@ postgres = "0.19"
 postgres-native-tls = "0.5.3"
 postgres-rustls = { package = "postgres_rustls", version = "0.1" }
 predicates = { version = "3.1.3", default-features = false, features = ["diff", "regex"] }
-rusqlite = { version = "0.32", features = ["bundled"] }
+rusqlite = { version = "0.41", features = ["bundled"] }
 serde = { version = "1.0.215", features = ["derive"] }
 serde_json = "1.0"
 sha2 = "0.10"

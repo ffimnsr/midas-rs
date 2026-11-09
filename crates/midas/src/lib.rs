@@ -21,6 +21,7 @@ pub mod config;
 pub mod error;
 pub mod migration;
 pub mod sequel;
+pub mod sqlx;
 
 // Allows the `migrate!` placeholder to expand to `::midas::...` paths even
 // inside this crate.

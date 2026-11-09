@@ -5,6 +5,7 @@
 
 pub mod db_lifecycle;
 pub mod db_schema;
+pub mod doctor;
 pub mod generate;
 pub mod migrate;
 pub mod migrate_dev;
@@ -27,6 +28,8 @@ pub struct Context {
   pub dry_run: bool,
   /// Skip advisory locking.
   pub no_lock: bool,
+  /// Ignore applied migrations that are no longer present on disk.
+  pub ignore_missing: bool,
 }
 
 impl Context {
@@ -36,13 +39,15 @@ impl Context {
       config,
       dry_run: false,
       no_lock: false,
+      ignore_missing: false,
     }
   }
 
   /// Set global runner flags.
-  pub fn with_flags(mut self, dry_run: bool, no_lock: bool) -> Self {
+  pub fn with_flags(mut self, dry_run: bool, no_lock: bool, ignore_missing: bool) -> Self {
     self.dry_run = dry_run;
     self.no_lock = no_lock;
+    self.ignore_missing = ignore_missing;
     self
   }
 }
@@ -54,6 +59,7 @@ pub fn register(app: Command) -> Command {
   let app = schema::register(app);
   let app = app.subcommand(db_command());
   let app = generate::register(app);
+  let app = doctor::register(app);
   sqlx::register(app)
 }
 
@@ -74,6 +80,9 @@ pub fn dispatch(matches: &ArgMatches, context: &Context) -> Result<()> {
   }
   if generate::owns(name) {
     return generate::dispatch(name, sub, context);
+  }
+  if doctor::owns(name) {
+    return doctor::dispatch(name, sub, context);
   }
   if sqlx::owns(name) {
     return sqlx::dispatch(name, sub, context);
@@ -127,7 +136,9 @@ mod tests {
       .map(|command| command.get_name())
       .collect::<Vec<_>>();
 
-    for expected in ["init", "run", "info", "db", "schema", "generate", "sqlx"] {
+    for expected in [
+      "init", "run", "info", "db", "schema", "generate", "sqlx", "doctor",
+    ] {
       assert!(names.contains(&expected), "missing `{expected}` in {names:?}");
     }
   }

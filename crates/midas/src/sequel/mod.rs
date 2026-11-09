@@ -27,8 +27,11 @@ pub use introspect::{
 };
 pub use store::{
   Locker,
+  MetadataInfo,
   MigrationStore,
 };
+
+pub use crate::migration::ChecksumMode;
 
 use crate::config::Config;
 use crate::{
@@ -128,6 +131,18 @@ pub fn connect(config: &Config) -> Result<Box<dyn Backend>> {
   }
 }
 
+/// Open a backend without creating or upgrading the metadata table.
+///
+/// This is used to inspect an existing table before adoption.
+pub fn connect_existing(config: &Config) -> Result<Box<dyn Backend>> {
+  let url = config.require_database_url()?.to_string();
+
+  match DatabaseEngine::from_url(&url)? {
+    DatabaseEngine::Postgres | DatabaseEngine::CockroachDb => connect_postgres_existing(config),
+    DatabaseEngine::Sqlite => connect_sqlite_existing(config, &url),
+  }
+}
+
 /// Open a maintenance backend that can create or drop the configured database.
 pub fn connect_admin(config: &Config) -> Result<Box<dyn DatabaseAdmin>> {
   let url = config.require_database_url()?.to_string();
@@ -168,6 +183,16 @@ fn connect_postgres(_: &Config) -> Result<Box<dyn Backend>> {
   Err(Error::unsupported_feature("postgres", "driver"))
 }
 
+#[cfg(feature = "postgres")]
+fn connect_postgres_existing(config: &Config) -> Result<Box<dyn Backend>> {
+  Ok(Box::new(postgres::Postgres::open_existing(config)?))
+}
+
+#[cfg(not(feature = "postgres"))]
+fn connect_postgres_existing(_: &Config) -> Result<Box<dyn Backend>> {
+  Err(Error::unsupported_feature("postgres", "driver"))
+}
+
 #[cfg(feature = "sqlite")]
 fn connect_sqlite(config: &Config, url: &str) -> Result<Box<dyn Backend>> {
   Ok(Box::new(sqlite::Sqlite::with_config(config, url)?))
@@ -175,6 +200,16 @@ fn connect_sqlite(config: &Config, url: &str) -> Result<Box<dyn Backend>> {
 
 #[cfg(not(feature = "sqlite"))]
 fn connect_sqlite(_: &Config, _: &str) -> Result<Box<dyn Backend>> {
+  Err(Error::unsupported_feature("sqlite", "driver"))
+}
+
+#[cfg(feature = "sqlite")]
+fn connect_sqlite_existing(config: &Config, url: &str) -> Result<Box<dyn Backend>> {
+  Ok(Box::new(sqlite::Sqlite::open_existing(config, url)?))
+}
+
+#[cfg(not(feature = "sqlite"))]
+fn connect_sqlite_existing(_: &Config, _: &str) -> Result<Box<dyn Backend>> {
   Err(Error::unsupported_feature("sqlite", "driver"))
 }
 

@@ -42,6 +42,28 @@ pub enum FilePart {
   Down,
 }
 
+/// How discovery handles `.sql` files that do not match the naming rules.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum SqlFilePolicy {
+  /// Fail discovery.
+  #[default]
+  Error,
+  /// Log a warning and skip the file.
+  Warn,
+  /// Skip the file silently.
+  Ignore,
+}
+
+/// Version scheme used when creating a migration.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Versioning {
+  /// Milliseconds since the Unix epoch.
+  #[default]
+  Timestamp,
+  /// One greater than the highest existing version, starting at 1.
+  Sequential,
+}
+
 /// Parsed migration filename.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParsedFilename {
@@ -90,15 +112,16 @@ pub fn parse_filename(path: &Path) -> Result<ParsedFilename> {
     )));
   }
 
-  if description.is_empty()
-    || !description
-      .chars()
-      .all(|character| character.is_ascii_alphanumeric() || matches!(character, '.' | '_' | '-'))
-  {
+  if description.is_empty() {
     return Err(Error::migration(format!(
       "invalid migration description in `{filename}`; expected [A-Za-z0-9._-]+"
     )));
   }
+  validate_description(description).map_err(|_| {
+    Error::migration(format!(
+      "invalid migration description in `{filename}`; expected [A-Za-z0-9._-]+"
+    ))
+  })?;
 
   Ok(ParsedFilename {
     version,
@@ -108,8 +131,28 @@ pub fn parse_filename(path: &Path) -> Result<ParsedFilename> {
   })
 }
 
+/// Validate a description that will be embedded in a migration filename.
+pub fn validate_description(description: &str) -> Result<()> {
+  if description.is_empty()
+    || !description
+      .chars()
+      .all(|character| character.is_ascii_alphanumeric() || matches!(character, '.' | '_' | '-'))
+  {
+    return Err(Error::migration(format!(
+      "migration description `{description}` cannot be represented in a filename; expected [A-Za-z0-9._-]+"
+    )));
+  }
+  Ok(())
+}
+
 /// Build the migration list for a directory. Missing directories are empty.
 pub fn discover(path: &Path) -> Result<MigrationList> {
+  discover_with(path, SqlFilePolicy::Error)
+}
+
+/// Build the migration list for a directory with an explicit policy for
+/// unrecognized `.sql` files.
+pub fn discover_with(path: &Path, policy: SqlFilePolicy) -> Result<MigrationList> {
   if !path.exists() {
     return Ok(MigrationList::new());
   }
@@ -127,7 +170,20 @@ pub fn discover(path: &Path) -> Result<MigrationList> {
       continue;
     }
 
-    let parsed = parse_filename(&entry.path())?;
+    let parsed = match parse_filename(&entry.path()) {
+      Ok(parsed) => parsed,
+      Err(error) => match policy {
+        SqlFilePolicy::Error => return Err(error),
+        SqlFilePolicy::Warn => {
+          tracing::warn!(
+            path = %entry.path().to_string_lossy(),
+            "ignoring unrecognized migration file: {error}"
+          );
+          continue;
+        },
+        SqlFilePolicy::Ignore => continue,
+      },
+    };
     let version = parsed.version;
     match parsed.part {
       FilePart::Single => {
@@ -197,6 +253,8 @@ pub fn discover(path: &Path) -> Result<MigrationList> {
 }
 
 fn detect_no_transaction(content: &str) -> bool {
+  // A UTF-8 BOM must not hide the marker from the first-line check.
+  let content = content.strip_prefix('\u{feff}').unwrap_or(content);
   content
     .lines()
     .map(str::trim)
@@ -212,10 +270,22 @@ fn duplicate(version: i64) -> Error {
 ///
 /// Returns the version assigned to the new migration.
 pub fn create_migration_file(path: &Path, slug: &str, reversible: bool) -> Result<i64> {
+  create_migration_file_with(path, slug, reversible, Versioning::Timestamp)
+}
+
+/// Create a new migration file with an explicit version scheme.
+///
+/// Returns the version assigned to the new migration.
+pub fn create_migration_file_with(
+  path: &Path,
+  slug: &str,
+  reversible: bool,
+  versioning: Versioning,
+) -> Result<i64> {
   let slug = normalize_slug(slug)?;
   fs::create_dir_all(path)?;
 
-  let version = next_version(path)?;
+  let version = next_version(path, versioning)?;
   if reversible {
     let up = path.join(format!("{version:013}_{slug}.up.sql"));
     let down = path.join(format!("{version:013}_{slug}.down.sql"));
@@ -252,15 +322,26 @@ fn normalize_slug(slug: &str) -> Result<String> {
   Ok(slug)
 }
 
-fn next_version(path: &Path) -> Result<i64> {
+fn next_version(path: &Path, versioning: Versioning) -> Result<i64> {
   let existing = existing_versions(path)?;
-  let mut version = timestamp_millis()?;
-  while existing.contains(&version) {
-    version = version
+  match versioning {
+    Versioning::Sequential => existing
+      .iter()
+      .next_back()
+      .copied()
+      .unwrap_or(0)
       .checked_add(1)
-      .ok_or_else(|| Error::migration("migration version overflow"))?;
+      .ok_or_else(|| Error::migration("migration version overflow")),
+    Versioning::Timestamp => {
+      let mut version = timestamp_millis()?;
+      while existing.contains(&version) {
+        version = version
+          .checked_add(1)
+          .ok_or_else(|| Error::migration("migration version overflow"))?;
+      }
+      Ok(version)
+    },
   }
-  Ok(version)
 }
 
 fn existing_versions(path: &Path) -> Result<BTreeSet<i64>> {
@@ -421,5 +502,16 @@ mod tests {
     let first = create_migration_file(dir.path(), "first", false).expect("create");
     let second = create_migration_file(dir.path(), "second", false).expect("create");
     assert!(second > first);
+  }
+
+  #[test]
+  fn sequential_versions_start_at_one() {
+    let dir = tempfile::tempdir().expect("temp dir");
+    let first =
+      create_migration_file_with(dir.path(), "first", false, Versioning::Sequential).expect("create");
+    let second =
+      create_migration_file_with(dir.path(), "second", true, Versioning::Sequential).expect("create");
+    assert_eq!(first, 1);
+    assert_eq!(second, 2);
   }
 }

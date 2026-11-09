@@ -1,15 +1,47 @@
 //! Migration metadata storage and advisory locking abstractions.
 
+use std::collections::BTreeSet;
 use std::time::Duration;
 
-use crate::migration::MigrationRecord;
+use crate::migration::{
+  ChecksumMode,
+  MigrationRecord,
+};
 use crate::Result;
+
+/// Column inventory for a metadata table.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct MetadataInfo {
+  /// Whether the table exists.
+  pub exists: bool,
+  /// Table columns.
+  pub columns: BTreeSet<String>,
+  /// Whether the table is SQLx-managed (it has no `down_checksum` column).
+  pub sqlx_managed: bool,
+}
+
+impl MetadataInfo {
+  /// Whether the table stores DOWN checksums.
+  pub fn has_down_checksum(&self) -> bool {
+    self.columns.contains("down_checksum")
+  }
+}
 
 /// Persistent metadata table operations.
 pub trait MigrationStore {
   /// Create the metadata table when it does not exist and upgrade legacy
   /// schemas in place.
   fn ensure_table(&mut self) -> Result<()>;
+
+  /// Describe the configured metadata table without modifying it.
+  fn metadata_info(&mut self) -> Result<MetadataInfo> {
+    Ok(MetadataInfo::default())
+  }
+
+  /// Checksum contract used by the configured metadata table.
+  fn checksum_mode(&self) -> ChecksumMode {
+    ChecksumMode::Midas
+  }
 
   /// List every metadata row ordered by version.
   fn list_migrations(&mut self) -> Result<Vec<MigrationRecord>>;

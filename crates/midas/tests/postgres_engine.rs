@@ -6,11 +6,18 @@ mod common;
 
 #[cfg(feature = "postgres")]
 mod postgres {
+  use std::collections::BTreeSet;
+  use std::fs;
   use std::time::Duration;
 
-  use midas::commander::Migrator;
+  use midas::commander::{
+    Migrator,
+    MigratorOptions,
+  };
   use midas::config::Config;
   use midas::migration::{
+    checksum_hex,
+    ChecksumMode,
     Migration,
     MigrationFormat,
     MigrationList,
@@ -20,6 +27,7 @@ mod postgres {
     self,
     MigrationStore,
   };
+  use midas::sqlx::baseline_from_sqlx;
   use midas::Error;
   use postgres::{
     Client,
@@ -58,6 +66,47 @@ mod postgres {
 
   fn client(database_url: &str) -> Client {
     Client::connect(database_url, NoTls).expect("connect admin client")
+  }
+
+  fn sqlx_checksum(sql: &str) -> Vec<u8> {
+    ChecksumMode::Sqlx {
+      ignored_chars: Default::default(),
+    }
+    .checksum(sql)
+    .to_vec()
+  }
+
+  fn create_sqlx_table(database_url: &str, up: &str, success: bool, execution_time: i64) -> Vec<u8> {
+    let checksum = sqlx_checksum(up);
+    let mut client = client(database_url);
+    client
+      .batch_execute(&format!(
+        "drop table if exists public._sqlx_migrations;
+         create table public._sqlx_migrations (
+           version bigint primary key,
+           description text not null,
+           installed_on timestamptz not null default now(),
+           success boolean not null,
+           checksum bytea not null,
+           execution_time bigint not null
+         );
+         insert into public._sqlx_migrations
+           (version, description, success, checksum, execution_time)
+         values (1, 'init', {success}, decode('{}', 'hex'), {execution_time});",
+        checksum_hex(&checksum)
+      ))
+      .expect("create sqlx metadata table");
+    checksum
+  }
+
+  fn adoption_config(database_url: &str) -> Config {
+    Config {
+      database_url: Some(database_url.to_string()),
+      metadata_schema: None,
+      metadata_table: "_sqlx_migrations".to_string(),
+      lock_timeout: Duration::from_secs(5),
+      ..Config::default()
+    }
   }
 
   #[test]
@@ -260,15 +309,155 @@ mod postgres {
 
   #[test]
   #[ignore = "requires Docker"]
-  fn admin_can_create_and_drop_databases() {
+  fn sqlx_table_is_adopted_without_alteration() {
     let database = common::run_postgres();
-    let mut admin = sequel::connect_admin(&config(database.url())).expect("admin");
-    let name = common::unique_name("midas_created");
+    let up = "create table adopted_widget (id integer);\n";
+    create_sqlx_table(database.url(), up, true, 7);
 
-    assert!(!admin.database_exists(&name).expect("exists"));
-    admin.create_database(&name).expect("create");
-    assert!(admin.database_exists(&name).expect("exists"));
-    admin.force_drop_database(&name).expect("drop");
-    assert!(!admin.database_exists(&name).expect("exists"));
+    let config = adoption_config(database.url());
+    let mut backend = sequel::connect(&config).expect("adopt");
+    let info = backend.metadata_info().expect("metadata info");
+    assert!(info.sqlx_managed);
+    assert!(!info.has_down_checksum());
+
+    let mut migrator = Migrator::new(
+      sequel::connect(&config).expect("connect"),
+      list(&[migration(1, up, Some("drop table adopted_widget;\n"), false)]),
+    );
+    let state = migrator.up(None).expect("up is a no-op");
+    assert_eq!(state.applied, vec![1]);
+
+    let mut client = client(database.url());
+    let down_checksum: bool = client
+      .query_one(
+        "select exists(select 1 from information_schema.columns \
+         where table_schema = 'public' and table_name = '_sqlx_migrations' \
+         and column_name = 'down_checksum')",
+        &[],
+      )
+      .expect("query")
+      .get(0);
+    assert!(!down_checksum, "adoption must not add columns");
+  }
+
+  #[test]
+  #[ignore = "requires Docker"]
+  fn sqlx_dirty_rows_are_rejected() {
+    let database = common::run_postgres();
+    create_sqlx_table(database.url(), "select 1;\n", false, 1);
+
+    let config = adoption_config(database.url());
+    let error = midas::sqlx::verify_adoption(&config, "_sqlx_migrations").expect_err("dirty");
+    assert!(matches!(error, Error::DirtyMigration { version: 1 }));
+  }
+
+  #[test]
+  #[ignore = "requires Docker"]
+  fn baseline_from_sqlx_never_runs_sql() {
+    let database = common::run_postgres();
+    let up = "this is not valid sql;\n";
+    create_sqlx_table(database.url(), up, true, 42);
+
+    let migrations_dir = tempfile::tempdir().expect("temp dir");
+    fs::write(
+      migrations_dir.path().join("1_init.sql"),
+      "-- !UP\nthis is not valid sql;\n-- !DOWN\nselect 1;\n",
+    )
+    .expect("write migration");
+
+    let config = Config {
+      database_url: Some(database.url().to_string()),
+      migrations_dir: migrations_dir.path().to_path_buf(),
+      lock_timeout: Duration::from_secs(5),
+      ..Config::default()
+    };
+    let report = baseline_from_sqlx(&config, &MigratorOptions::default()).expect("baseline");
+    assert_eq!(report.inserted, vec![1]);
+
+    let mut backend = sequel::connect_existing(&config).expect("target");
+    let records = backend.list_migrations().expect("list");
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].execution_time, 42);
+    assert_eq!(
+      records[0].checksum,
+      ChecksumMode::Midas.checksum("this is not valid sql;\n"),
+      "target checksums use the Midas contract"
+    );
+  }
+
+  #[test]
+  #[ignore = "requires Docker"]
+  fn execution_time_is_recorded_in_nanoseconds() {
+    let database = common::run_postgres();
+    let mut migrator = Migrator::new(
+      sequel::connect(&config(database.url())).expect("connect"),
+      list(&[migration(
+        1,
+        "select pg_sleep(0.01);\n",
+        Some("select 1;\n"),
+        false,
+      )]),
+    );
+    migrator.up(None).expect("apply");
+
+    let mut backend = sequel::connect_existing(&config(database.url())).expect("connect");
+    let record = &backend.list_migrations().expect("list")[0];
+    assert!(
+      record.execution_time > 1_000_000,
+      "execution time must be nanoseconds, got {}",
+      record.execution_time
+    );
+  }
+
+  #[test]
+  #[ignore = "requires Docker"]
+  fn create_schemas_places_the_metadata_table() {
+    let database = common::run_postgres();
+    let config = Config {
+      database_url: Some(database.url().to_string()),
+      metadata_schema: Some("audit_schema".to_string()),
+      metadata_table: "migrations".to_string(),
+      create_schemas: ["audit_schema".to_string()].into_iter().collect::<BTreeSet<_>>(),
+      lock_timeout: Duration::from_secs(5),
+      ..Config::default()
+    };
+    let _backend = sequel::connect(&config).expect("connect");
+
+    let mut client = client(database.url());
+    let exists: bool = client
+      .query_one(
+        "select exists(select 1 from information_schema.tables \
+         where table_schema = 'audit_schema' and table_name = 'migrations')",
+        &[],
+      )
+      .expect("query")
+      .get(0);
+    assert!(exists);
+  }
+
+  #[test]
+  #[ignore = "requires Docker"]
+  fn no_lock_applies_with_the_advisory_lock_held() {
+    let database = common::run_postgres();
+    let config = config(database.url());
+    let mut holder = sequel::connect(&config).expect("holder");
+    holder.lock().expect("hold lock");
+
+    let mut migrator = Migrator::new(
+      sequel::connect(&config).expect("connect"),
+      list(&[migration(
+        1,
+        "create table unlocked (id integer);\n",
+        Some("drop table unlocked;\n"),
+        false,
+      )]),
+    )
+    .with_options(MigratorOptions {
+      no_lock: true,
+      ..MigratorOptions::default()
+    });
+    migrator.up(None).expect("no-lock apply");
+
+    holder.unlock().expect("unlock");
   }
 }

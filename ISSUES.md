@@ -624,84 +624,84 @@ Roadmap reference: WS4, M2; audit section 9.7.
 
 ### 2.1 Migration import/export
 
-- [ ] Add `crates/midas/src/sqlx/mod.rs`, `import.rs`, `export.rs`.
-- [ ] Implement `export_sqlx(migrations, out_dir)`:
-  - [ ] Write `<version>_<description>.up.sql` for every migration.
-  - [ ] Write `<version>_<description>.down.sql` when `down` exists.
-  - [ ] Preserve the exact `up`/`down` strings.
-  - [ ] Prepend `-- no-transaction\n` when `no_tx` is true.
-  - [ ] Reject descriptions that cannot be represented in a filename.
-- [ ] Implement `import_sqlx(dir) -> Vec<Migration>`:
-  - [ ] Parse `<version>_<description>.sql` as one-way.
-  - [ ] Parse `<version>_<description>.up.sql` and `.down.sql` as reversible.
-  - [ ] Detect `-- no-transaction`.
-  - [ ] Compute SHA-384 over imported SQL.
-- [ ] Add round-trip tests:
-  - [ ] Export then import yields identical `up`, `down`, `no_tx`, and checksums.
-  - [ ] Define round-trip equality on exported SQLx files, where `no_tx` is always
+- [x] Add `crates/midas/src/sqlx/mod.rs`, `import.rs`, `export.rs`.
+- [x] Implement `export_sqlx(migrations, out_dir)`:
+  - [x] Write `<version>_<description>.up.sql` for every migration.
+  - [x] Write `<version>_<description>.down.sql` when `down` exists.
+  - [x] Preserve the exact `up`/`down` strings.
+  - [x] Prepend `-- no-transaction\n` when `no_tx` is true.
+  - [x] Reject descriptions that cannot be represented in a filename.
+- [x] Implement `import_sqlx(dir) -> Vec<Migration>`:
+  - [x] Parse `<version>_<description>.sql` as one-way.
+  - [x] Parse `<version>_<description>.up.sql` and `.down.sql` as reversible.
+  - [x] Detect `-- no-transaction`.
+  - [x] Compute SHA-384 over imported SQL.
+- [x] Add round-trip tests:
+  - [x] Export then import yields identical `up`, `down`, `no_tx`, and checksums.
+  - [x] Define round-trip equality on exported SQLx files, where `no_tx` is always
         the first line; do not compare against the original Midas marker placement.
-  - [ ] Export a reversible migration and assert both files exist.
-  - [ ] Import a one-way migration and assert `down = None`.
-- [ ] Add a CI step that installs `sqlx-cli` and runs:
-  - [ ] `sqlx migrate info --source <exported-dir>`
-  - [ ] `sqlx migrate run --source <exported-dir>`
+  - [x] Export a reversible migration and assert both files exist.
+  - [x] Import a one-way migration and assert `down = None`.
+- [x] Add a CI step that installs `sqlx-cli` and runs:
+  - [x] `sqlx migrate info --source <exported-dir>`
+  - [x] `sqlx migrate run --source <exported-dir>`
 
 ### 2.2 Adopt `_sqlx_migrations`
 
-- [ ] Implement `midas migrate baseline --from sqlx`:
-  - [ ] Read `_sqlx_migrations` (`version`, `description`, `success`, `checksum`).
-  - [ ] Match versions to local migration files.
-  - [ ] Insert matching rows into the configured Midas metadata table.
-  - [ ] Fail if a local file is missing for an applied version.
-- [ ] Implement `midas migrate adopt --table _sqlx_migrations`:
-  - [ ] Set `metadata_schema = None` and `metadata_table = "_sqlx_migrations"`.
-  - [ ] Verify the table has SQLx's columns.
-  - [ ] Do not alter the SQLx-managed table. Detect whether `down_checksum` exists.
-  - [ ] If `down_checksum` is absent, skip DOWN checksum storage and validate DOWN
+- [x] Implement `midas migrate baseline --from sqlx`:
+  - [x] Read `_sqlx_migrations` (`version`, `description`, `success`, `checksum`).
+  - [x] Match versions to local migration files.
+  - [x] Insert matching rows into the configured Midas metadata table.
+  - [x] Fail if a local file is missing for an applied version.
+- [x] Implement `midas migrate adopt --table _sqlx_migrations`:
+  - [x] Set `metadata_schema = None` and `metadata_table = "_sqlx_migrations"`.
+  - [x] Verify the table has SQLx's columns.
+  - [x] Do not alter the SQLx-managed table. Detect whether `down_checksum` exists.
+  - [x] If `down_checksum` is absent, skip DOWN checksum storage and validate DOWN
         from the migration file on revert.
-  - [ ] Refuse to adopt if `success = false` rows exist.
-- [ ] Implement `sqlx.toml` reading using SQLx's kebab-case keys:
-  - [ ] Read `[migrate] table-name`, `create-schemas`, `migrations-dir`,
+  - [x] Refuse to adopt if `success = false` rows exist.
+- [x] Implement `sqlx.toml` reading using SQLx's kebab-case keys:
+  - [x] Read `[migrate] table-name`, `create-schemas`, `migrations-dir`,
         `ignored-chars`, and `unrecognized-sql-files`.
-  - [ ] Read `[migrate.defaults] migration-type` and `migration-versioning` for
+  - [x] Read `[migrate.defaults] migration-type` and `migration-versioning` for
         import/add defaults.
-  - [ ] Add tests with a fixture `sqlx.toml`.
-- [ ] Add integration tests:
-  - [ ] A database with SQLx-applied migrations is baselined without re-running SQL.
-  - [ ] A dirty `_sqlx_migrations` row causes adoption to fail with a clear error.
-  - [ ] A custom table name from `sqlx.toml` is honored.
+  - [x] Add tests with a fixture `sqlx.toml`.
+- [x] Add integration tests:
+  - [x] A database with SQLx-applied migrations is baselined without re-running SQL.
+  - [x] A dirty `_sqlx_migrations` row causes adoption to fail with a clear error.
+  - [x] A custom table name from `sqlx.toml` is honored.
 
 ### 2.3 Schema-only database for `cargo sqlx prepare`
 
-- [ ] Use Phase 1's `midas db create --from-migrations <dir>` in the SQLx prepare
+- [x] Use Phase 1's `midas db create --from-migrations <dir>` in the SQLx prepare
       workflow:
-  - [ ] Create the database if absent.
-  - [ ] Apply all migrations in the directory.
-  - [ ] Do not create SQLx metadata; Midas metadata is allowed.
-- [ ] Defer `db create --from-schema` to Phase 5, because it needs the DSL.
-- [ ] Add a test that `db create --from-migrations` followed by
+  - [x] Create the database if absent.
+  - [x] Apply all migrations in the directory.
+  - [x] Do not create SQLx metadata; Midas metadata is allowed.
+- [x] Defer `db create --from-schema` to Phase 5, because it needs the DSL.
+- [x] Add a test that `db create --from-migrations` followed by
       `cargo sqlx prepare` works without a DSL file.
-- [ ] Add a CI fixture `crates/midas/tests/fixtures/sqlx-prepare/`:
-  - [ ] `Cargo.toml` with `sqlx 0.9` features `runtime-tokio`, `postgres`,
+- [x] Add a CI fixture `crates/midas/tests/fixtures/sqlx-prepare/`:
+  - [x] `Cargo.toml` with `sqlx 0.9` features `runtime-tokio`, `postgres`,
         `macros`, `migrate`.
-  - [ ] `src/main.rs` with `sqlx::query!` and `query_as!` calls.
-  - [ ] `.env` with `DATABASE_URL`.
-- [ ] Add CI steps:
-  - [ ] `midas db create --from-migrations <dir>`.
-  - [ ] `cargo sqlx prepare --check --workspace`.
-  - [ ] `SQLX_OFFLINE=true cargo check`.
-- [ ] Add tests for `--workspace`, `--all-targets --all-features`, and queries inside
+  - [x] `src/main.rs` with `sqlx::query!` and `query_as!` calls.
+  - [x] `.env` with `DATABASE_URL`.
+- [x] Add CI steps:
+  - [x] `midas db create --from-migrations <dir>`.
+  - [x] `cargo sqlx prepare --check --workspace`.
+  - [x] `SQLX_OFFLINE=true cargo check`.
+- [x] Add tests for `--workspace`, `--all-targets --all-features`, and queries inside
       `#[cfg(test)]`.
 
 ### 2.4 Conformance and compatibility
 
-- [ ] Add a `sqlx-conformance` CI job with a Postgres service.
-- [ ] Verify `execution_time` is stored in nanoseconds.
-- [ ] Verify `success = false` is treated as dirty.
-- [ ] Verify `ignore_missing` behavior when a local migration is removed.
-- [ ] Verify `--no-lock` behavior against CockroachDB-like settings.
-- [ ] Verify `create-schemas` places the metadata table in the requested schema.
-- [ ] Add a `midas doctor --sqlx` check that detects `_sqlx_migrations` and prints
+- [x] Add a `sqlx-conformance` CI job with a Postgres service.
+- [x] Verify `execution_time` is stored in nanoseconds.
+- [x] Verify `success = false` is treated as dirty.
+- [x] Verify `ignore_missing` behavior when a local migration is removed.
+- [x] Verify `--no-lock` behavior against CockroachDB-like settings.
+- [x] Verify `create-schemas` places the metadata table in the requested schema.
+- [x] Add a `midas doctor --sqlx` check that detects `_sqlx_migrations` and prints
       the recommended next command.
 
 ## Acceptance criteria

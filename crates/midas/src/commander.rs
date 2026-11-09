@@ -18,6 +18,7 @@ use serde::Serialize;
 use crate::config::TransactionMode;
 use crate::migration::{
   checksum_hex,
+  ChecksumMode,
   LockGuard,
   Migration,
   MigrationList,
@@ -43,6 +44,8 @@ pub struct MigratorOptions {
   pub transaction: TransactionMode,
   /// Suppress human-readable progress output (used by `--json`).
   pub quiet: bool,
+  /// Ignore applied versions whose migration file is no longer present.
+  pub ignore_missing: bool,
 }
 
 /// Summary state used by `info` and JSON output.
@@ -152,7 +155,8 @@ impl Migrator {
     self.with_backend(|backend, migrations, options| {
       let records = backend.list_migrations()?;
       ensure_not_dirty(&records)?;
-      validate_checksums(&records, migrations)?;
+      let mode = backend.checksum_mode();
+      validate_migrations(&records, migrations, &mode, options)?;
 
       let pending = pending_versions(&records, migrations, target);
       for version in pending {
@@ -181,7 +185,8 @@ impl Migrator {
     self.with_backend(|backend, migrations, options| {
       let records = backend.list_migrations()?;
       ensure_not_dirty(&records)?;
-      validate_checksums(&records, migrations)?;
+      let mode = backend.checksum_mode();
+      validate_migrations(&records, migrations, &mode, options)?;
 
       let mut versions = records
         .iter()
@@ -246,7 +251,7 @@ impl Migrator {
           println!("-- baseline {:013} {}", migration.version, migration.description);
           continue;
         }
-        let record = record_for(migration, 0, true);
+        let record = record_for(migration, 0, true, &backend.checksum_mode());
         write_metadata(backend, &record, true)?;
       }
       Ok(build_info(&backend.list_migrations()?, migrations))
@@ -257,11 +262,12 @@ impl Migrator {
   pub fn repair(&mut self) -> Result<MigrationInfo> {
     self.with_backend(|backend, migrations, _| {
       let records = backend.list_migrations()?;
+      let mode = backend.checksum_mode();
       for record in records.iter().filter(|record| record.success) {
         let Some(migration) = migrations.get(&record.version) else {
           continue;
         };
-        let repaired = record_for(migration, record.execution_time, true);
+        let repaired = record_for(migration, record.execution_time, true, &mode);
         backend.repair(&repaired)?;
       }
       Ok(build_info(&backend.list_migrations()?, migrations))
@@ -366,7 +372,29 @@ fn ensure_not_dirty(records: &[MigrationRecord]) -> Result<()> {
   }
 }
 
-fn validate_checksums(records: &[MigrationRecord], migrations: &MigrationList) -> Result<()> {
+fn validate_migrations(
+  records: &[MigrationRecord],
+  migrations: &MigrationList,
+  mode: &ChecksumMode,
+  options: &MigratorOptions,
+) -> Result<()> {
+  if !options.ignore_missing {
+    for record in records.iter().filter(|record| record.success) {
+      if !migrations.contains_key(&record.version) {
+        return Err(Error::MigrationNotFound {
+          version: record.version,
+        });
+      }
+    }
+  }
+  validate_checksums(records, migrations, mode)
+}
+
+fn validate_checksums(
+  records: &[MigrationRecord],
+  migrations: &MigrationList,
+  mode: &ChecksumMode,
+) -> Result<()> {
   for record in records.iter().filter(|record| record.success) {
     let Some(migration) = migrations.get(&record.version) else {
       continue;
@@ -374,14 +402,16 @@ fn validate_checksums(records: &[MigrationRecord], migrations: &MigrationList) -
     if record.is_unverified() {
       continue;
     }
-    if record.checksum != migration.checksum_up {
+    let expected = mode.checksum(&migration.up);
+    if record.checksum.as_slice() != expected {
       return Err(Error::ChecksumMismatch {
         version: record.version,
-        expected: migration.checksum_up_hex(),
+        expected: checksum_hex(&expected),
         actual: record.checksum_hex(),
       });
     }
-    if let (Some(stored), Some(expected)) = (&record.down_checksum, migration.checksum_down) {
+    let expected_down = migration.down.as_deref().map(|down| mode.checksum(down));
+    if let (Some(stored), Some(expected)) = (&record.down_checksum, expected_down) {
       if !crate::migration::checksum_is_unverified(stored) && stored.as_slice() != expected {
         return Err(Error::ChecksumMismatch {
           version: record.version,
@@ -424,15 +454,20 @@ fn resolve_version(records: &[MigrationRecord], version: Option<i64>) -> Result<
   Ok(version)
 }
 
-fn record_for(migration: &Migration, execution_time: i64, success: bool) -> MigrationRecord {
+fn record_for(
+  migration: &Migration,
+  execution_time: i64,
+  success: bool,
+  mode: &ChecksumMode,
+) -> MigrationRecord {
   MigrationRecord {
     version: migration.version,
     description: migration.description.clone(),
     installed_on: String::new(),
     success,
-    checksum: migration.checksum_up.to_vec(),
+    checksum: mode.checksum(&migration.up).to_vec(),
     execution_time,
-    down_checksum: migration.checksum_down.map(|checksum| checksum.to_vec()),
+    down_checksum: migration.down.as_deref().map(|down| mode.checksum(down).to_vec()),
   }
 }
 
@@ -456,6 +491,7 @@ fn apply_migration(
     );
   }
   let started = Instant::now();
+  let mode = backend.checksum_mode();
   let transactional = options.transaction == TransactionMode::PerMigration
     && !migration.no_tx
     && backend.supports(Feature::TransactionalDdl);
@@ -474,21 +510,21 @@ fn apply_migration(
     }
     if let Err(error) = backend.execute_batch(&migration.up) {
       let _ = backend.rollback();
-      let dirty = record_for(migration, execution_time(started), false);
+      let dirty = record_for(migration, execution_time(started), false, &mode);
       write_metadata(backend, &dirty, true)?;
       return Err(error);
     }
-    let record = record_for(migration, execution_time(started), true);
+    let record = record_for(migration, execution_time(started), true, &mode);
     backend.upsert(&record)?;
     backend.commit()?;
   } else {
     match backend.execute_batch(&migration.up) {
       Ok(()) => {
-        let record = record_for(migration, execution_time(started), true);
+        let record = record_for(migration, execution_time(started), true, &mode);
         write_metadata(backend, &record, true)?;
       },
       Err(error) => {
-        let dirty = record_for(migration, execution_time(started), false);
+        let dirty = record_for(migration, execution_time(started), false, &mode);
         write_metadata(backend, &dirty, true)?;
         return Err(error);
       },

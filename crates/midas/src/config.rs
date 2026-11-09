@@ -4,7 +4,10 @@
 //! Environment access is injectable through [`EnvSource`] so tests never mutate
 //! process-global state.
 
-use std::collections::BTreeMap;
+use std::collections::{
+  BTreeMap,
+  BTreeSet,
+};
 use std::path::{
   Path,
   PathBuf,
@@ -18,6 +21,7 @@ use serde::{
 use url::Url;
 
 use crate::sequel::DatabaseEngine;
+use crate::sqlx::config::SqlxConfig;
 use crate::{
   Error,
   Result,
@@ -28,6 +32,9 @@ pub const CONFIG_FILE: &str = "midas.toml";
 
 /// Default metadata table used when the configuration does not override it.
 pub const DEFAULT_METADATA_TABLE: &str = "__schema_migrations";
+
+/// Default schema for the metadata table on Postgres.
+pub const DEFAULT_METADATA_SCHEMA: &str = "midas";
 
 /// Default directory that stores migration files.
 pub const DEFAULT_MIGRATIONS_DIR: &str = "migrations";
@@ -69,10 +76,15 @@ pub struct Config {
   pub database_url: Option<String>,
   /// Directory containing migration files.
   pub migrations_dir: PathBuf,
-  /// Optional metadata schema (Postgres only).
+  /// Optional metadata schema (Postgres only). `None` means the database's
+  /// current schema, which is what SQLx uses for an unqualified table name.
   pub metadata_schema: Option<String>,
   /// Metadata table name.
   pub metadata_table: String,
+  /// Schemas that must exist before the metadata table is created.
+  pub create_schemas: BTreeSet<String>,
+  /// Migration settings read from `sqlx.toml`.
+  pub sqlx: SqlxConfig,
   /// Optional shadow database used for drift detection.
   pub shadow_database_url: Option<String>,
   /// Advisory lock timeout.
@@ -94,8 +106,10 @@ impl Default for Config {
     Self {
       database_url: None,
       migrations_dir: PathBuf::from(DEFAULT_MIGRATIONS_DIR),
-      metadata_schema: None,
+      metadata_schema: Some(DEFAULT_METADATA_SCHEMA.to_string()),
       metadata_table: DEFAULT_METADATA_TABLE.to_string(),
+      create_schemas: BTreeSet::new(),
+      sqlx: SqlxConfig::default(),
       shadow_database_url: None,
       lock_timeout: DEFAULT_LOCK_TIMEOUT,
       statement_timeout: None,
@@ -257,6 +271,11 @@ impl Config {
   pub fn from_file(path: &Path) -> Result<Self> {
     let file = MidasConfig::from_path(path)?;
     let mut config = Self::default();
+    if let Some(dir) = path.parent() {
+      if let Some(sqlx) = SqlxConfig::load(dir)? {
+        config.apply_sqlx(sqlx)?;
+      }
+    }
     config.apply_file(&file);
     config.apply_env(&EmptyEnv, Some(&file))?;
     config.apply_overrides(&ConfigOverrides::default());
@@ -282,6 +301,11 @@ impl Config {
     };
 
     let mut config = Self::default();
+    if let Some(dir) = dir {
+      if let Some(sqlx) = SqlxConfig::load(dir)? {
+        config.apply_sqlx(sqlx)?;
+      }
+    }
     if let Some(file) = &file {
       config.apply_file(file);
     }
@@ -291,6 +315,22 @@ impl Config {
     Ok(config)
   }
 
+  /// Merge migration settings from `sqlx.toml`.
+  fn apply_sqlx(&mut self, sqlx: SqlxConfig) -> Result<()> {
+    if let Some(dir) = &sqlx.migrations_dir {
+      if !dir.as_os_str().is_empty() {
+        self.migrations_dir = dir.clone();
+      }
+    }
+    if let Some((schema, table)) = sqlx.table_location()? {
+      self.metadata_schema = schema;
+      self.metadata_table = table;
+    }
+    self.create_schemas = sqlx.create_schemas.clone();
+    self.sqlx = sqlx;
+    Ok(())
+  }
+
   /// Ensure the configuration is internally consistent.
   pub fn validate(&self) -> Result<()> {
     if self.migrations_dir.as_os_str().is_empty() {
@@ -298,6 +338,13 @@ impl Config {
     }
     if self.metadata_table.trim().is_empty() {
       return Err(Error::config("metadata table must not be empty"));
+    }
+    if self
+      .metadata_schema
+      .as_deref()
+      .is_some_and(|schema| schema.trim().is_empty())
+    {
+      return Err(Error::config("metadata schema must not be empty"));
     }
     if self.application_name.trim().is_empty() {
       return Err(Error::config("application name must not be empty"));
